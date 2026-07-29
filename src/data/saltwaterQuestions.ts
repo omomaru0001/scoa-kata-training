@@ -3,12 +3,8 @@ import type { Question, SaltwaterData, SaltwaterType } from '../types';
 const rule = '低い濃度は左、高い濃度は右、答えは真ん中';
 const base = (id:string, typeId:SaltwaterType, learningStage:Question['learningStage'], question:string, choices:string[], answerIndex:number, saltwater:SaltwaterData, mistakeReason:string):Question => ({
   id, categoryId:'saltwater-alligation', subcategoryId:'alligation-basics', typeId, difficulty:'basic', learningStage, question, formula:'天秤算', choices, answerIndex, shortRule:rule,
-  triggerWords:saltwater.readingClues, steps:[
-    `${saltwater.lowLabel}を左、${saltwater.highLabel}を右、${saltwater.targetLabel}を真ん中に置く`,
-    `真ん中から両端を引く：${saltwater.targetConcentration}－${saltwater.lowConcentration}＝${saltwater.leftDifference}、${saltwater.highConcentration}－${saltwater.targetConcentration}＝${saltwater.rightDifference}`,
-    `差は反対側の重さへ。重さの比は ${saltwater.amountRatio} と読む`,
-  ], explanation:'天秤では、真ん中からの差が反対側の重さにつながります。', deepExplanation:'見せる解き方は天秤だけです。低い・目標・高いの順に置き、差を反対側へ渡して比を作ります。', mistakeReason,
-  diagramType:'saltwater-alligation', diagramData:{}, tags:['食塩水','濃度','天秤算'], saltwater,
+  triggerWords:saltwater.readingClues, steps:['まず、問題文に書かれた濃度と重さだけを置く','差は反対側の重さへつなぐ','比から？を求める'], explanation:'天秤では、真ん中からの差が反対側の重さにつながります。', deepExplanation:'見せる解き方は天秤だけです。低い・目標・高いの順に置き、差を反対側へ渡して比を作ります。', mistakeReason,
+  diagramType:'saltwater-alligation', diagramData:{}, tags:['食塩水','濃度','天秤算'], saltwater:{...saltwater, unknownPosition: saltwater.unknownPosition ?? (typeId==='mixed-concentration'?'target-concentration':typeId==='unknown-concentration'?'high-concentration':typeId==='ratio'?'amount-ratio':typeId==='difference-cross'?'difference':undefined), hiddenValue: choices[answerIndex], derivationSteps: saltwater.derivationSteps ?? [], diagramBeforeAnswer:true, diagramAfterAnswer:true},
 });
 
 const d = (values:Omit<SaltwaterData,'readingClues'|'characterTip'> & Partial<Pick<SaltwaterData,'readingClues'|'characterTip'>>):SaltwaterData => ({

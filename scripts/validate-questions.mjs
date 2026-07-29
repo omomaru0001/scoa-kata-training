@@ -16,6 +16,8 @@ let errors = []; const ids = new Set(); const fingerprints = new Set();
 function validateSaltwater(question) {
   const s = question.saltwater;
   if (!s) return errors.push(`${question.id}: 食塩水データがありません`);
+  if (!s.hiddenValue || !s.diagramBeforeAnswer || !s.diagramAfterAnswer) errors.push(`${question.id}: 導出前後の表示データが不足しています`);
+  if (s.unknownPosition && !s.hiddenValue.includes(question.choices[question.answerIndex].replace(/[^0-9％g：]/g, '')) && s.answerType !== 'identify') errors.push(`${question.id}: hiddenValueと正解が一致しません`);
   if (!(s.lowConcentration < s.targetConcentration && s.targetConcentration < s.highConcentration)) errors.push(`${question.id}: 低い＜目標＜高い ではありません`);
   if (s.leftDifference !== s.targetConcentration - s.lowConcentration || s.rightDifference !== s.highConcentration - s.targetConcentration) errors.push(`${question.id}: 濃度差が正しくありません`);
   if ((question.typeId === 'add-water' || question.typeId === 'alligation-identify') && (s.lowConcentration !== 0 || !s.lowLabel.includes('水'))) errors.push(`${question.id}: 水は0％として登録してください`);

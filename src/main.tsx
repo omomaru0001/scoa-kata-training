@@ -103,6 +103,12 @@ function App() {
 
   if (screen === 'review' || screen === 'weak') return <main className="app"><ScreenHeader title={screen === 'review' ? '間違えた問題の復習' : '苦手な型'} onBack={() => goBack()} /><section className="empty-card"><span>🌱</span><h2>{history.wrongIds.length ? `${history.wrongIds.length}問を、もう一度` : '復習リストは空です'}</h2><p>{history.wrongIds.length ? '見る場所から、ゆっくり確認し直せます。' : '最初の1問から、安心して始めましょう。'}</p><button className="primary" onClick={begin}>問題へ進む</button></section><button className="reset-link" onClick={() => { resetHistory(); setHistory(loadHistory()); }}>学習履歴をリセットする</button>{bottomNav}</main>;
 
+  if (answered && question.saltwater) {
+    const s = question.saltwater;
+    const answerText = question.choices[question.answerIndex];
+    const title = '食塩水・濃度｜天秤算';
+    return <main className="app quiz-screen"><ScreenHeader title={title} onBack={() => goBack()} right={`${index + 1} / ${activeQuestions.length}`} /><section className="answer-feedback"><div className={isCorrect ? 'result-banner correct-banner' : 'result-banner wrong-banner'}><span>{isCorrect ? '○ 正解' : '× ちがうよ'}</span><p>{isCorrect ? 'この型で大丈夫！' : 'おしい！ ？から順に求めよう。'}</p></div><div className="explain-section"><p className="section-kicker">今回の型</p><h2>{s.problemPattern}</h2><p className="rule">💡 {question.shortRule}</p></div><div className="reading-summary"><p><b>問題文から分かっていること</b>{s.readingClues.join('・')}</p><p><b>何を求める？</b>{s.questionIntent}</p></div><div className="explain-section"><p className="section-kicker">導出前の天秤図</p><Diagram question={question} revealAnswer={false} /></div><div className="explain-section"><p className="section-kicker">？を求める手順</p><ol><li>問題文で分かる濃度と重さだけを使う</li><li>差は反対側の重さにつなぐ</li><li>比から？を求める</li></ol></div><div className="answer-block"><span>答えが決まる</span><strong>{answerText}</strong><p>{question.explanation}</p></div><div className="explain-section completed-diagram"><p className="section-kicker">答えを入れた完成図</p><Diagram question={question} revealAnswer /></div><p className="mistake">⚠ 間違えやすいポイント：{question.mistakeReason}</p><details><summary>なぜそうなる？</summary><p>{question.deepExplanation}</p></details><button className="primary next-button" onClick={next}>次の問題へ</button></section></main>;
+  }
   const typeName = question.saltwater?.problemPattern ?? question.sequence?.problemPattern ?? formula?.name ?? '公式の型';
   const categoryTitle = activeCategory === 'saltwater-alligation' ? '食塩水・濃度｜天秤算' : activeCategory === 'sequence-patterns' ? '数列｜規則の見つけ方' : '因数分解・公式暗記';
   const salt = question.saltwater;

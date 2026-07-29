@@ -9,6 +9,7 @@ export type SaltwaterData = {
   readingClues:string[]; characterTip:string; answerType:'concentration'|'amount'|'ratio'|'identify';
   validationData:{ expected:number; unit:'%'|'g'|'ratio'|'yes-no'; answerText?:string; mix?:{lowAmount:number;highAmount:number}; };
   finalConcentration?:number; diagramMode?:'placement'|'difference'|'cross'|'ratio'|'water'|'salt'|'evaporation';
+  hiddenValue?:string; derivationSteps?:string[]; diagramBeforeAnswer?:boolean; diagramAfterAnswer?:boolean;
 };
 export type SequenceData = { problemPattern:string; sequenceValues:(number|null)[]; blankIndexes:number[]; operationPattern:string[]; differences?:number[]; ratios?:string[]; nextValues:number[]; readingOrder:string; diagramMode:'difference'|'ratio'|'growing-difference'|'alternating'|'fibonacci'|'famous'|'changing-multiplier'|'difference-pattern'|'identify'; validationData:{mode:SequenceType; expectedAnswer:string}; characterTip:string; };
 export type Question = { id:string; categoryId:string; subcategoryId:string; typeId:FormulaId|SaltwaterType|SequenceType; difficulty:'basic'; learningStage:LearningStage; question:string; formula:string; choices:string[]; answerIndex:number; shortRule:string; triggerWords:string[]; steps:string[]; explanation:string; deepExplanation:string; mistakeReason:string; diagramType:'sum-product-pair'|'square-tiles'|'difference-squares'|'saltwater-alligation'|'sequence-pattern'; diagramData:Record<string,string>; tags:string[]; saltwater?:SaltwaterData; sequence?:SequenceData };
