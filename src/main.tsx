@@ -1,22 +1,108 @@
-import React, {useMemo, useState} from 'react'; import {createRoot} from 'react-dom/client';
-import questionsJson from './data/questions.json'; import {formulas} from './data/formulas'; import {cheers} from './constants/cheers'; import {loadHistory,resetHistory,saveHistory,type History} from './lib/storage'; import {Diagram} from './components/Diagram'; import type {Question} from './types'; import './styles.css'; import './phase-one.css';
-const questions=questionsJson as Question[]; type Screen='home'|'categories'|'modes'|'formulas'|'quiz'|'result'|'review'|'weak';
-const names={sui:'すいくん',runa:'るなちゃん','sui-and-runa':'すいくん・るなちゃん',supporter:'森の学習案内'};
-function App(){const [screen,setScreen]=useState<Screen>('home'),[index,setIndex]=useState(0),[selected,setSelected]=useState<number|null>(null),[history,setHistory]=useState<History>(loadHistory),[showCheer,setShowCheer]=useState(false),[cheerId,setCheerId]=useState('cheer-1'); const q=questions[index%questions.length];
- const formula=formulas.find(f=>f.id===q.typeId)!; const persist=(h:History)=>{setHistory(h);saveHistory(h)}; const begin=()=>{if(!history.cheer.firstShown){setCheerId('cheer-1');setShowCheer(true);persist({...history,cheer:{...history.cheer,firstShown:true}})}else setScreen('quiz')};
- const answer=(i:number)=>{if(selected!==null)return;setSelected(i);const ok=i===q.answerIndex;const old=history.answers[q.id]||{attempts:0,correct:0,wrong:0,streak:0,lastAt:'',avgSeconds:0};const today=history.today===new Date().toISOString().slice(0,10)?history.todayTotal:0;
-  persist({...history,total:history.total+1,today:new Date().toISOString().slice(0,10),todayTotal:today+1,
-   answers:{...history.answers,[q.id]:{...old,attempts:old.attempts+1,correct:old.correct+(ok?1:0),wrong:old.wrong+(ok?0:1),streak:ok?old.streak+1:0,lastAt:new Date().toISOString()}},
-   wrongIds:ok?history.wrongIds:[...new Set([...history.wrongIds,q.id])]});
- };
- const next=()=>{const h=loadHistory();const remain=h.cheer.remaining-1;if(remain<=0){const candidates=cheers.filter(c=>c.timing==='before-question'&&!h.cheer.recent.includes(c.id));const c=candidates[Math.floor(Math.random()*candidates.length)]||cheers[2];setCheerId(c.id);persist({...h,cheer:{...h.cheer,remaining:7+Math.floor(Math.random()*3),recent:[...h.cheer.recent,c.id].slice(-3),lastAnswerTotal:h.total}});setShowCheer(true)}else{persist({...h,cheer:{...h.cheer,remaining:remain}});setIndex(index+1);setSelected(null)}};
- const cheer=cheers.find(c=>c.id===cheerId)!; const startFromCheer=()=>{setShowCheer(false);setScreen('quiz');setSelected(null)}; const accuracy=history.total?Math.round(Object.values(history.answers).reduce((s,a)=>s+a.correct,0)/history.total*100):0;
- const nav=<nav><button onClick={()=>setScreen('home')}>🏡 ホーム</button><button onClick={()=>setScreen('formulas')}>📒 公式一覧</button><button onClick={()=>setScreen('review')}>🔁 復習</button></nav>;
- if(showCheer)return <main className="app cheer"><div className="character">{cheer.speaker==='runa'?'🐰':cheer.speaker==='sui'?'🦊':'🦉'}</div><p className="speaker">{names[cheer.speaker]}</p><div className="bubble">「{cheer.message}」</div><p className="muted">今日の回答数：{history.todayTotal}問　・　次は型を見るところから</p><button className="primary" onClick={startFromCheer}>次の問題へ →</button></main>;
- if(screen==='home')return <main className="app"><header><span>🌿</span><div><p className="eyebrow">SCOA・3尺度版 対策</p><h1>SCOA 型トレーニング</h1></div></header><section className="hero"><span className="owl">🦉</span><h2>文章が違っても、<br/>「この型」と見抜けるように。</h2><p>まずは、使う公式と見る場所を覚えよう。</p><button className="primary" onClick={()=>setScreen('categories')}>学習をはじめる</button></section><section className="stats"><span>今日 {history.todayTotal}問</span><span>正解率 {accuracy}%</span></section><button className="text-button" onClick={()=>setScreen('weak')}>苦手な型を見る</button>{nav}</main>;
- if(screen==='categories')return <main className="app"><header><h1>カテゴリを選ぶ</h1><button onClick={()=>setScreen('home')}>閉じる</button></header><button className="category-card" onClick={()=>setScreen('modes')}><span>🟣</span><div><b>因数分解・公式暗記</b><small>4つの公式を、見分けるところから</small></div><span>→</span></button><p className="muted">ほかのカテゴリは、フェーズ2以降に追加予定です。</p>{nav}</main>;
- if(screen==='modes')return <main className="app"><header><h1>学習モードを選ぶ</h1><button onClick={()=>setScreen('categories')}>戻る</button></header><p className="intro">今は「まず覚える」から始めるのがおすすめです。</p><div className="mode-grid">{[['まず覚える','公式を1つずつ見る'],['穴埋め','公式の一部を選ぶ'],['型を見分ける','使う型だけを選ぶ'],['数字を当てはめる','公式に数字を入れる'],['実戦問題','最初から最後まで解く'],['苦手だけ復習','まちがえた型を優先'],['ランダム確認','4つの型をまぜる']].map(([name,desc],i)=><button key={name} className="mode-card" onClick={i===5?()=>setScreen('weak'):begin}><b>{name}</b><small>{desc}</small></button>)}</div>{nav}</main>;
- if(screen==='formulas')return <main className="app"><header><h1>公式・型の一覧</h1><button onClick={()=>setScreen('home')}>閉じる</button></header><p className="intro">1枚ずつ、合言葉と見る場所を確認できます。</p>{formulas.map(f=><article className="formula-card" key={f.id}><p className="type">型：{f.name}</p><h2>{f.formula}</h2><p className="rule">💡 {f.rule}</p><p><b>見る場所：</b>{f.lookFor}</p><p className="example">例：{f.example}</p><progress value={(history.answers[questions.find(q=>q.typeId===f.id)?.id||'']?.correct||0)*25} max="100"/></article>)}{nav}</main>;
- if(screen==='review'||screen==='weak')return <main className="app"><header><h1>{screen==='review'?'間違えた問題の復習':'苦手な型'}</h1><button onClick={()=>setScreen('home')}>閉じる</button></header><p className="intro">{history.wrongIds.length?`${history.wrongIds.length}問を、見る場所からもう一度。`:'まだ復習リストは空です。安心して最初の1問へ。'}</p><button className="primary" onClick={begin}>問題へ進む</button><button className="text-button" onClick={()=>{resetHistory();setHistory(loadHistory())}}>学習履歴をリセット</button>{nav}</main>;
- return <main className="app"><header><div><p className="eyebrow">因数分解・公式暗記　{index+1} / {questions.length}</p><h1>まず、型を見よう</h1></div><button onClick={()=>setScreen('home')}>終了</button></header><section className="question-card"><p className="type">🟣 型：{formula.name}</p><h2>{q.question}</h2><p className="look">🔎 見る場所：{q.triggerWords.join(' ・ ')}</p><p className="rule">💡 {q.shortRule}</p><div className="choices">{q.choices.map((c,i)=><button key={c} disabled={selected!==null} className={selected===null?'':i===q.answerIndex?'correct':i===selected?'wrong':''} onClick={()=>answer(i)}><span>{'ABCD'[i]}</span>{c}</button>)}</div></section>{selected!==null&&<section className="explain"><p className={selected===q.answerIndex?'good':'bad'}>{selected===q.answerIndex?'○ 正解！ この型で大丈夫。':'△ おしい！ 次は見る場所を先に確認しよう。'}</p><h2>解き方</h2><ol>{q.steps.map(s=><li key={s}>{s}</li>)}</ol><Diagram question={q}/><p><b>答え：</b>{q.choices[q.answerIndex]}</p><p>{q.explanation}</p><details><summary>なぜそうなる？</summary><p>{q.deepExplanation}</p></details><p className="mistake">⚠ {q.mistakeReason}</p><button className="primary" onClick={next}>次の問題へ →</button></section>}{nav}</main>}
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+import React, { useEffect, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import questionsJson from './data/questions.json';
+import { formulas } from './data/formulas';
+import { cheers } from './constants/cheers';
+import { loadHistory, resetHistory, saveHistory, type History } from './lib/storage';
+import { Diagram } from './components/Diagram';
+import type { Question } from './types';
+import './styles.css';
+
+const questions = questionsJson as Question[];
+type Screen = 'home' | 'categories' | 'modes' | 'formulas' | 'quiz' | 'review' | 'weak';
+const speakerNames = { sui: 'すいくん', runa: 'るなちゃん', 'sui-and-runa': 'すいくん・るなちゃん', supporter: '森の学習案内' };
+const modeItems = [
+  ['🌱', 'まず覚える', '公式を1つずつ見る'], ['🧩', '穴埋め', '公式の一部を選ぶ'],
+  ['🔎', '型を見分ける', '使う型だけを選ぶ'], ['✏️', '数字を当てはめる', '公式に数字を入れる'],
+  ['📝', '実戦問題', '最初から最後まで解く'], ['🔁', '苦手だけ復習', 'まちがえた型を優先'], ['🎲', 'ランダム確認', '4つの型をまぜる'],
+] as const;
+
+function App() {
+  const [screen, setScreen] = useState<Screen>('home');
+  const [index, setIndex] = useState(0);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [history, setHistory] = useState<History>(loadHistory);
+  const [showCheer, setShowCheer] = useState(false);
+  const [cheerId, setCheerId] = useState('cheer-1');
+  const question = questions[index % questions.length];
+  const formula = formulas.find((item) => item.id === question.typeId)!;
+  const answered = selected !== null;
+  const isCorrect = selected === question.answerIndex;
+
+  useEffect(() => {
+    window.history.replaceState({ screen: 'home' }, '');
+    const onPopState = (event: PopStateEvent) => {
+      setShowCheer(false);
+      setScreen((event.state?.screen as Screen) || 'home');
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const persist = (next: History) => { setHistory(next); saveHistory(next); };
+  const go = (next: Screen) => {
+    setScreen(next);
+    window.history.pushState({ screen: next }, '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const goBack = (fallback: Screen = 'home') => {
+    if (screen === 'home') return;
+    go(fallback);
+  };
+  const begin = () => {
+    if (!history.cheer.firstShown) {
+      setCheerId('cheer-1'); setShowCheer(true);
+      persist({ ...history, cheer: { ...history.cheer, firstShown: true } });
+    } else go('quiz');
+  };
+  const answer = (choiceIndex: number) => {
+    if (answered) return;
+    setSelected(choiceIndex);
+    const correct = choiceIndex === question.answerIndex;
+    const old = history.answers[question.id] || { attempts: 0, correct: 0, wrong: 0, streak: 0, lastAt: '', avgSeconds: 0 };
+    const today = history.today === new Date().toISOString().slice(0, 10) ? history.todayTotal : 0;
+    persist({
+      ...history, total: history.total + 1, today: new Date().toISOString().slice(0, 10), todayTotal: today + 1,
+      answers: { ...history.answers, [question.id]: { ...old, attempts: old.attempts + 1, correct: old.correct + (correct ? 1 : 0), wrong: old.wrong + (correct ? 0 : 1), streak: correct ? old.streak + 1 : 0, lastAt: new Date().toISOString() } },
+      wrongIds: correct ? history.wrongIds : [...new Set([...history.wrongIds, question.id])],
+    });
+    window.setTimeout(() => document.querySelector('.answer-feedback')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  };
+  const next = () => {
+    const saved = loadHistory();
+    const remaining = saved.cheer.remaining - 1;
+    if (remaining <= 0) {
+      const candidates = cheers.filter((item) => item.timing === 'before-question' && !saved.cheer.recent.includes(item.id));
+      const cheer = candidates[Math.floor(Math.random() * candidates.length)] || cheers[2];
+      setCheerId(cheer.id);
+      persist({ ...saved, cheer: { ...saved.cheer, remaining: 7 + Math.floor(Math.random() * 3), recent: [...saved.cheer.recent, cheer.id].slice(-3), lastAnswerTotal: saved.total } });
+      setShowCheer(true);
+    } else {
+      persist({ ...saved, cheer: { ...saved.cheer, remaining } });
+      setIndex(index + 1); setSelected(null); window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+  const accuracy = history.total ? Math.round(Object.values(history.answers).reduce((sum, item) => sum + item.correct, 0) / history.total * 100) : 0;
+  const cheer = cheers.find((item) => item.id === cheerId)!;
+  const bottomNav = <nav className="bottom-nav"><button onClick={() => go('home')}>🏡 ホーム</button><button onClick={() => go('formulas')}>📒 公式一覧</button><button onClick={() => go('review')}>🔁 復習</button></nav>;
+
+  if (showCheer) return <main className="app cheer-screen"><div className="cheer-avatar">{cheer.speaker === 'runa' ? '🐰' : cheer.speaker === 'sui' ? '🦊' : '🦉'}</div><p className="speaker">{speakerNames[cheer.speaker]}</p><div className="bubble">「{cheer.message}」</div><p className="cheer-status">今日の回答数：{history.todayTotal}問</p><button className="primary" onClick={() => { setShowCheer(false); go('quiz'); }}>次の問題へ</button></main>;
+
+  if (screen === 'home') return <main className="app home-screen"><section className="home-title"><span aria-hidden>🌿</span><p className="eyebrow">SCOA・3尺度版 対策</p><h1>SCOA 型トレーニング</h1><p>文章が違っても、まず「この型」を見つけよう。</p></section><section className="study-summary"><span><b>{history.todayTotal}</b> 今日の回答</span><span><b>{accuracy}%</b> 正解率</span></section><section className="home-main"><div className="home-icon">🦉</div><h2>因数分解から、<br />型を見抜く練習を始めよう。</h2><p>公式・見る場所・合言葉の順に覚えられます。</p><button className="primary" onClick={() => go('categories')}>学習をはじめる</button></section><div className="home-subactions"><button onClick={() => go('formulas')}>📒 4つの公式を見る</button><button onClick={() => go('weak')}>🔁 苦手な型を復習</button></div>{bottomNav}</main>;
+
+  if (screen === 'categories') return <main className="app"><ScreenHeader title="カテゴリを選ぶ" onBack={() => goBack()} /><button className="selection-card" onClick={() => go('modes')}><span className="card-icon">🟣</span><span className="card-copy"><b>因数分解・公式暗記</b><small>4つの公式を、見分けるところから</small><em>全 {questions.length} 問のサンプル問題</em></span><span className="card-arrow">›</span></button><p className="page-note">ほかのカテゴリは、フェーズ2以降に追加予定です。</p>{bottomNav}</main>;
+
+  if (screen === 'modes') return <main className="app"><ScreenHeader title="学習モードを選ぶ" onBack={() => goBack('categories')} /><p className="page-lead">まずは「まず覚える」から始めるのがおすすめです。</p><div className="mode-list">{modeItems.map(([icon, name, description], itemIndex) => <button key={name} className="selection-card mode-card" onClick={itemIndex === 5 ? () => go('weak') : begin}><span className="card-icon">{icon}</span><span className="card-copy"><b>{name}</b><small>{description}</small></span><span className="card-arrow">›</span></button>)}</div>{bottomNav}</main>;
+
+  if (screen === 'formulas') return <main className="app"><ScreenHeader title="公式・型の一覧" onBack={() => goBack()} /><p className="page-lead">公式を大きく見て、合言葉とセットで覚えよう。</p>{formulas.map((item) => <article className="formula-card" key={item.id}><p className="type">🟣 型：{item.name}</p><h2 className="formula-text">{item.formula}</h2><p className="rule">💡 {item.rule}</p><p className="formula-detail"><b>見る場所</b>{item.lookFor}</p><p className="example"><b>数字入りの例</b>{item.example}</p><div className="mastery"><span>習得の目安</span><progress value={(history.answers[questions.find((q) => q.typeId === item.id)?.id || '']?.correct || 0) * 25} max="100" /></div></article>)}{bottomNav}</main>;
+
+  if (screen === 'review' || screen === 'weak') return <main className="app"><ScreenHeader title={screen === 'review' ? '間違えた問題の復習' : '苦手な型'} onBack={() => goBack()} /><section className="empty-card"><span>🌱</span><h2>{history.wrongIds.length ? `${history.wrongIds.length}問を、もう一度` : '復習リストは空です'}</h2><p>{history.wrongIds.length ? '見る場所から、ゆっくり確認し直せます。' : '最初の1問から、安心して始めましょう。'}</p><button className="primary" onClick={begin}>問題へ進む</button></section><button className="reset-link" onClick={() => { resetHistory(); setHistory(loadHistory()); }}>学習履歴をリセットする</button>{bottomNav}</main>;
+
+  return <main className="app quiz-screen"><ScreenHeader title="因数分解・公式暗記" onBack={() => goBack()} right={`${index + 1} / ${questions.length}`} /><div className="progress-label"><span>このセットの進み具合</span><b>{index + (answered ? 1 : 0)} / {questions.length}</b></div><div className="progress-bar"><span style={{ width: `${((index + (answered ? 1 : 0)) / questions.length) * 100}%` }} /></div><section className="question-card"><p className="type">🟣 型：{formula.name}</p><p className="question-label">この問題は、何の型？</p><h2 className="question-text">{question.question}</h2><div className="look-block"><b>🔎 見る場所</b><span>{question.triggerWords.join(' ・ ')}</span></div><div className="rule-block"><b>💡 合言葉</b><span>{question.shortRule}</span></div></section><div className="choices">{question.choices.map((choice, choiceIndex) => <button key={choice} disabled={answered} className={!answered ? '' : choiceIndex === question.answerIndex ? 'correct' : choiceIndex === selected ? 'wrong' : 'muted-choice'} onClick={() => answer(choiceIndex)}><span>{'ABCD'[choiceIndex]}</span>{choice}</button>)}</div>{answered && <section className="answer-feedback"><div className={isCorrect ? 'result-banner correct-banner' : 'result-banner wrong-banner'}><span>{isCorrect ? '○ 正解' : '× ちがうよ'}</span><p>{isCorrect ? 'この型で大丈夫！' : 'おしい！ この問題はここを見るよ。'}</p></div><div className="explain-section"><p className="section-kicker">この問題の型</p><h2>{formula.name}</h2><p className="rule">💡 {question.shortRule}</p></div><div className="explain-section"><p className="section-kicker">図解で確認</p><Diagram question={question} /></div><div className="explain-section"><p className="section-kicker">手順</p><ol>{question.steps.map((step) => <li key={step}>{step}</li>)}</ol></div><div className="answer-block"><span>答え</span><strong>{question.choices[question.answerIndex]}</strong><p>{question.explanation}</p></div><p className="mistake">⚠ 間違えやすいポイント：{question.mistakeReason}</p><details><summary>なぜそうなる？</summary><p>{question.deepExplanation}</p></details><button className="primary next-button" onClick={next}>次の問題へ</button></section>}</main>;
+}
+
+function ScreenHeader({ title, onBack, right }: { title: string; onBack: () => void; right?: string }) {
+  return <header className="screen-header"><button className="back-button" onClick={onBack}>← 戻る</button><h1>{title}</h1>{right && <span>{right}</span>}</header>;
+}
+
+createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
