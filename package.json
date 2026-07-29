@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "validate": "node scripts/validate-questions.mjs"
+    "validate": "node --experimental-strip-types scripts/validate-questions.mjs"
   },
   "keywords": [],
   "author": "",
