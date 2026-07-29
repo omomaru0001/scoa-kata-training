@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import { saltwaterQuestions } from '../src/data/saltwaterQuestions.ts';
+import { sequenceQuestions } from '../src/data/sequenceQuestions.ts';
 
 const factorization = JSON.parse(fs.readFileSync(new URL('../src/data/questions.json', import.meta.url), 'utf8'));
-const questions = [...factorization, ...saltwaterQuestions];
+const questions = [...factorization, ...saltwaterQuestions, ...sequenceQuestions];
 const required = ['id','categoryId','subcategoryId','typeId','difficulty','learningStage','question','formula','choices','answerIndex','shortRule','triggerWords','steps','explanation','deepExplanation','mistakeReason','diagramType','diagramData','tags'];
 const factorExpected = {
   'factor-basic-001':'(x＋a)(x＋b)','factor-basic-002':'(x＋2)(x＋3)','factor-plus-001':'(x＋a)²','factor-plus-002':'プラスの完全平方',
@@ -38,6 +39,34 @@ function validateSaltwater(question) {
   }
 }
 
+function validateSequence(question) {
+  const s = question.sequence;
+  if (!s) return errors.push(`${question.id}: 数列データがありません`);
+  const answer = question.choices[question.answerIndex];
+  if (answer !== s.validationData.expectedAnswer) errors.push(`${question.id}: 正解選択肢と数列の答えが一致しません`);
+  if (s.blankIndexes.length !== s.nextValues.length && s.blankIndexes.length > 0) errors.push(`${question.id}: 空欄数と次の値の数が一致しません`);
+  const filled = [...s.sequenceValues]; s.blankIndexes.forEach((index, i) => { filled[index] = s.nextValues[i]; });
+  const values = filled.filter((value) => value !== null);
+  const diffs = values.slice(1).map((value, i) => value - values[i]);
+  const ratios = values.slice(1).map((value, i) => values[i] === 0 ? NaN : value / values[i]);
+  const same = (items) => items.every((value) => Math.abs(value - items[0]) < epsilon);
+  if (s.validationData.mode === 'constant-difference' && !same(diffs)) errors.push(`${question.id}: 一定差が一致しません`);
+  if (s.validationData.mode === 'constant-ratio' && !same(ratios)) errors.push(`${question.id}: 一定比が一致しません`);
+  if (s.validationData.mode === 'growing-difference' && !diffs.slice(1).every((value, i) => value === diffs[i] * 2)) errors.push(`${question.id}: 差が2倍になっていません`);
+  if (s.validationData.mode === 'fibonacci' && !values.slice(2).every((value, i) => value === values[i] + values[i + 1])) errors.push(`${question.id}: 前2項の和になっていません`);
+  if (s.validationData.mode === 'famous-sequence') {
+    if (s.problemPattern.includes('素数')) { const prime = (n) => n > 1 && Array.from({ length: Math.floor(Math.sqrt(n)) - 1 }, (_, i) => i + 2).every((d) => n % d !== 0); if (!values.every(prime)) errors.push(`${question.id}: 素数問題に合成数が混ざっています`); }
+    if (s.problemPattern.includes('平方')) if (!values.every((n) => Number.isInteger(Math.sqrt(n)))) errors.push(`${question.id}: 平方数が一致しません`);
+  }
+  if (s.validationData.mode === 'changing-multiplier') { const expected = s.operationPattern.flatMap((x) => [...x.matchAll(/×(\d+)/g)].map((m) => Number(m[1]))); if (!ratios.every((ratio, i) => ratio === expected[i])) errors.push(`${question.id}: 掛ける数の増加が一致しません`); }
+  if (s.validationData.mode === 'difference-pattern' && s.differences && !s.differences.every((value, i) => value === diffs[i])) errors.push(`${question.id}: 差の数列が正しくありません`);
+  if (s.validationData.mode === 'alternating') {
+    const expected = question.id === 'sequence-alt-001' ? [2,-5,2,-5,2,-5,2,-5] : [2,2,2,2,2,2];
+    if (question.id === 'sequence-alt-001' && !diffs.every((value, i) => value === expected[i])) errors.push(`${question.id}: 交互計算が一致しません`);
+    if (question.id === 'sequence-alt-002' && !values.slice(1).every((value, i) => i % 2 === 0 ? value === values[i] * 2 : value === values[i] + 2)) errors.push(`${question.id}: 交互計算が一致しません`);
+  }
+}
+
 for (const question of questions) {
   for (const key of required) if (question[key] === undefined || question[key] === '' || (Array.isArray(question[key]) && !question[key].length)) errors.push(`${question.id || 'unknown'}: ${key} が空です`);
   if (ids.has(question.id)) errors.push(`${question.id}: ID重複`); ids.add(question.id);
@@ -48,8 +77,9 @@ for (const question of questions) {
   const fingerprint = `${question.question}|${question.choices.join('|')}`; if (fingerprints.has(fingerprint)) errors.push(`${question.id}: 同一問題重複`); fingerprints.add(fingerprint);
   if (question.categoryId === 'factorization') { if (!question.formula.includes('＝')) errors.push(`${question.id}: 公式の形式不正`); if (factorExpected[question.id] !== question.choices?.[question.answerIndex]) errors.push(`${question.id}: 公式・数式の正解照合に失敗`); }
   if (question.categoryId === 'saltwater-alligation') validateSaltwater(question);
+  if (question.categoryId === 'sequence-patterns') validateSequence(question);
 }
 console.log(`カテゴリ数: ${new Set(questions.map((q) => q.categoryId)).size}`);
-console.log(`問題数: ${questions.length}（因数分解 ${factorization.length}問 / 食塩水 ${saltwaterQuestions.length}問）`);
+console.log(`問題数: ${questions.length}（因数分解 ${factorization.length}問 / 食塩水 ${saltwaterQuestions.length}問 / 数列 ${sequenceQuestions.length}問）`);
 if (errors.length) { console.error(`検証エラー\n${errors.join('\n')}`); process.exit(1); }
 console.log('検証成功: ID・必須項目・4択・重複・公式整合性・天秤差・反対側比・食塩量保存を確認しました。');

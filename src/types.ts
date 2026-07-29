@@ -1,5 +1,6 @@
 export type FormulaId = 'basic' | 'square-plus' | 'square-minus' | 'difference-squares';
 export type SaltwaterType = 'placement' | 'difference-cross' | 'ratio' | 'mixed-concentration' | 'unknown-amount' | 'add-water' | 'add-salt' | 'evaporation' | 'unknown-concentration' | 'alligation-identify';
+export type SequenceType = 'constant-difference'|'constant-ratio'|'growing-difference'|'alternating'|'fibonacci'|'famous-sequence'|'changing-multiplier'|'difference-pattern'|'sequence-identify';
 export type LearningStage = 'memorize' | 'forward' | 'reverse' | 'blank' | 'symbol' | 'identify' | 'substitute' | 'compare' | 'place' | 'difference' | 'cross' | 'ratio' | 'apply';
 export type SaltwaterData = {
   problemPattern:string; questionIntent:string; lowConcentration:number; targetConcentration:number; highConcentration:number;
@@ -9,5 +10,6 @@ export type SaltwaterData = {
   validationData:{ expected:number; unit:'%'|'g'|'ratio'|'yes-no'; answerText?:string; mix?:{lowAmount:number;highAmount:number}; };
   finalConcentration?:number; diagramMode?:'placement'|'difference'|'cross'|'ratio'|'water'|'salt'|'evaporation';
 };
-export type Question = { id:string; categoryId:string; subcategoryId:string; typeId:FormulaId|SaltwaterType; difficulty:'basic'; learningStage:LearningStage; question:string; formula:string; choices:string[]; answerIndex:number; shortRule:string; triggerWords:string[]; steps:string[]; explanation:string; deepExplanation:string; mistakeReason:string; diagramType:'sum-product-pair'|'square-tiles'|'difference-squares'|'saltwater-alligation'; diagramData:Record<string,string>; tags:string[]; saltwater?:SaltwaterData };
+export type SequenceData = { problemPattern:string; sequenceValues:(number|null)[]; blankIndexes:number[]; operationPattern:string[]; differences?:number[]; ratios?:string[]; nextValues:number[]; readingOrder:string; diagramMode:'difference'|'ratio'|'growing-difference'|'alternating'|'fibonacci'|'famous'|'changing-multiplier'|'difference-pattern'|'identify'; validationData:{mode:SequenceType; expectedAnswer:string}; characterTip:string; };
+export type Question = { id:string; categoryId:string; subcategoryId:string; typeId:FormulaId|SaltwaterType|SequenceType; difficulty:'basic'; learningStage:LearningStage; question:string; formula:string; choices:string[]; answerIndex:number; shortRule:string; triggerWords:string[]; steps:string[]; explanation:string; deepExplanation:string; mistakeReason:string; diagramType:'sum-product-pair'|'square-tiles'|'difference-squares'|'saltwater-alligation'|'sequence-pattern'; diagramData:Record<string,string>; tags:string[]; saltwater?:SaltwaterData; sequence?:SequenceData };
 export type Formula = {id:FormulaId; name:string; formula:string; rule:string; lookFor:string; example:string; diagramType:Question['diagramType']};
