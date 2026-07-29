@@ -1,0 +1,4 @@
+export type FormulaId = 'basic' | 'square-plus' | 'square-minus' | 'difference-squares';
+export type LearningStage = 'memorize' | 'forward' | 'reverse' | 'blank' | 'symbol' | 'identify' | 'substitute' | 'compare';
+export type Question = { id:string; categoryId:string; subcategoryId:string; typeId:FormulaId; difficulty:'basic'; learningStage:LearningStage; question:string; formula:string; choices:string[]; answerIndex:number; shortRule:string; triggerWords:string[]; steps:string[]; explanation:string; deepExplanation:string; mistakeReason:string; diagramType:'sum-product-pair'|'square-tiles'|'difference-squares'; diagramData:Record<string,string>; tags:string[] };
+export type Formula = {id:FormulaId; name:string; formula:string; rule:string; lookFor:string; example:string; diagramType:Question['diagramType']};
