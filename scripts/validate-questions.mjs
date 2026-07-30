@@ -31,6 +31,21 @@ function validateSaltwater(question) {
     const ratioFromDifferences = s.rightDifference / s.leftDifference;
     if (Math.abs(ratioFromAmounts - ratioFromDifferences) > epsilon) errors.push(`${question.id}: 差と反対側の重さの比が一致しません`);
   }
+  if (question.typeId === 'mixed-concentration') {
+    const m = s.mixedConcentration;
+    if (!m || !s.lowAmount || !s.highAmount) errors.push(`${question.id}: 混合後濃度の導出データが不足しています`);
+    else {
+      const gcdOf = (a, b) => b ? gcdOf(b, a % b) : a;
+      const gcd = gcdOf(s.lowAmount, s.highAmount);
+      if (m.simplifiedAmountRatio[0] !== s.lowAmount / gcd || m.simplifiedAmountRatio[1] !== s.highAmount / gcd) errors.push(`${question.id}: 重さの比の約分が正しくありません`);
+      if (m.inverseDistanceRatio[0] !== m.simplifiedAmountRatio[1] || m.inverseDistanceRatio[1] !== m.simplifiedAmountRatio[0]) errors.push(`${question.id}: 濃度の距離比が重さの逆比ではありません`);
+      if (m.totalConcentrationGap !== s.highConcentration - s.lowConcentration) errors.push(`${question.id}: 両端の濃度差が正しくありません`);
+      if (m.gapUnit * (m.inverseDistanceRatio[0] + m.inverseDistanceRatio[1]) !== m.totalConcentrationGap) errors.push(`${question.id}: 濃度差の分割が正しくありません`);
+      if (m.distanceFromLow !== m.gapUnit * m.inverseDistanceRatio[0] || m.distanceFromHigh !== m.gapUnit * m.inverseDistanceRatio[1]) errors.push(`${question.id}: 距離の分割が正しくありません`);
+      if (s.lowConcentration + m.distanceFromLow !== s.targetConcentration || s.highConcentration - m.distanceFromHigh !== s.targetConcentration || m.derivedTargetConcentration !== s.targetConcentration) errors.push(`${question.id}: 逆比から求めた濃度が正解と一致しません`);
+      if (s.unknownPosition !== 'target-concentration') errors.push(`${question.id}: 導出前の中央濃度を非表示にしてください`);
+    }
+  }
   const answer = question.choices[question.answerIndex];
   if (s.validationData.answerText && answer !== s.validationData.answerText) errors.push(`${question.id}: 選択肢の正解と登録した答えが一致しません`);
   if (s.answerType === 'ratio' && answer !== s.amountRatio) errors.push(`${question.id}: 比の正解がamountRatioと一致しません`);

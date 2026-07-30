@@ -7,6 +7,8 @@ import { formulas } from './data/formulas';
 import { cheers } from './constants/cheers';
 import { loadHistory, resetHistory, saveHistory, type History } from './lib/storage';
 import { Diagram } from './components/Diagram';
+import { BackMenu, type QuizBackActions } from './components/BackMenu';
+import { SaltwaterAnswerExplanation } from './components/SaltwaterAnswerExplanation';
 import type { Question } from './types';
 import './styles.css';
 
@@ -24,6 +26,7 @@ function App() {
   const [activeCategory, setActiveCategory] = useState<'factorization' | 'saltwater-alligation' | 'sequence-patterns'>('factorization');
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
+  const [setAnswers, setSetAnswers] = useState<Record<number, number>>({});
   const [history, setHistory] = useState<History>(loadHistory);
   const [showCheer, setShowCheer] = useState(false);
   const [cheerId, setCheerId] = useState('cheer-1');
@@ -37,6 +40,9 @@ function App() {
     window.history.replaceState({ screen: 'home' }, '');
     const onPopState = (event: PopStateEvent) => {
       setShowCheer(false);
+      const restoredIndex = event.state?.index;
+      if (typeof restoredIndex === 'number') setIndex(restoredIndex);
+      if (event.state?.category) setActiveCategory(event.state.category);
       setScreen((event.state?.screen as Screen) || 'home');
     };
     window.addEventListener('popstate', onPopState);
@@ -46,7 +52,7 @@ function App() {
   const persist = (next: History) => { setHistory(next); saveHistory(next); };
   const go = (next: Screen) => {
     setScreen(next);
-    window.history.pushState({ screen: next }, '');
+    window.history.pushState({ screen: next, category: activeCategory, index }, '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const goBack = (fallback: Screen = 'home') => {
@@ -59,10 +65,16 @@ function App() {
       persist({ ...history, cheer: { ...history.cheer, firstShown: true } });
     } else go('quiz');
   };
-  const chooseCategory = (category: 'factorization' | 'saltwater-alligation' | 'sequence-patterns') => { setActiveCategory(category); setIndex(0); setSelected(null); go('modes'); };
+  useEffect(() => { if (screen === 'quiz') setSelected(setAnswers[index] ?? null); }, [index, screen, setAnswers]);
+  const chooseCategory = (category: 'factorization' | 'saltwater-alligation' | 'sequence-patterns') => {
+    setActiveCategory(category); setIndex(0); setSelected(null); setSetAnswers({}); setScreen('modes');
+    window.history.pushState({ screen: 'modes', category, index: 0 }, '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   const answer = (choiceIndex: number) => {
-    if (answered) return;
+    if (answered || setAnswers[index] !== undefined) return;
     setSelected(choiceIndex);
+    setSetAnswers((answers) => ({ ...answers, [index]: choiceIndex }));
     const correct = choiceIndex === question.answerIndex;
     const old = history.answers[question.id] || { attempts: 0, correct: 0, wrong: 0, streak: 0, lastAt: '', avgSeconds: 0 };
     const today = history.today === new Date().toISOString().slice(0, 10) ? history.todayTotal : 0;
@@ -81,14 +93,21 @@ function App() {
       const cheer = candidates[Math.floor(Math.random() * candidates.length)] || cheers[2];
       setCheerId(cheer.id);
       persist({ ...saved, cheer: { ...saved.cheer, remaining: 7 + Math.floor(Math.random() * 3), recent: [...saved.cheer.recent, cheer.id].slice(-3), lastAnswerTotal: saved.total } });
-      setShowCheer(true);
+      setIndex(index + 1); setSelected(setAnswers[index + 1] ?? null); setShowCheer(true);
     } else {
       persist({ ...saved, cheer: { ...saved.cheer, remaining } });
-      setIndex(index + 1); setSelected(null); window.scrollTo({ top: 0, behavior: 'smooth' });
+      setIndex(index + 1); setSelected(setAnswers[index + 1] ?? null); window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
   const accuracy = history.total ? Math.round(Object.values(history.answers).reduce((sum, item) => sum + item.correct, 0) / history.total * 100) : 0;
   const cheer = cheers.find((item) => item.id === cheerId)!;
+  const quizMenu: QuizBackActions = {
+    canGoPrevious: index > 0,
+    onPrevious: () => { if (index > 0) { const previous = index - 1; setIndex(previous); setSelected(setAnswers[previous] ?? null); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
+    onCategory: () => go('modes'),
+    onCategories: () => go('categories'),
+    onHome: () => go('home'),
+  };
   const bottomNav = <nav className="bottom-nav"><button onClick={() => go('home')}>🏡 ホーム</button><button onClick={() => go('formulas')}>📒 公式一覧</button><button onClick={() => go('review')}>🔁 復習</button></nav>;
 
   if (showCheer) return <main className="app cheer-screen"><div className="cheer-avatar">{cheer.speaker === 'runa' ? '🐰' : cheer.speaker === 'sui' ? '🦊' : '🦉'}</div><p className="speaker">{speakerNames[cheer.speaker]}</p><div className="bubble">「{cheer.message}」</div><p className="cheer-status">今日の回答数：{history.todayTotal}問</p><button className="primary" onClick={() => { setShowCheer(false); go('quiz'); }}>次の問題へ</button></main>;
@@ -103,21 +122,16 @@ function App() {
 
   if (screen === 'review' || screen === 'weak') return <main className="app"><ScreenHeader title={screen === 'review' ? '間違えた問題の復習' : '苦手な型'} onBack={() => goBack()} /><section className="empty-card"><span>🌱</span><h2>{history.wrongIds.length ? `${history.wrongIds.length}問を、もう一度` : '復習リストは空です'}</h2><p>{history.wrongIds.length ? '見る場所から、ゆっくり確認し直せます。' : '最初の1問から、安心して始めましょう。'}</p><button className="primary" onClick={begin}>問題へ進む</button></section><button className="reset-link" onClick={() => { resetHistory(); setHistory(loadHistory()); }}>学習履歴をリセットする</button>{bottomNav}</main>;
 
-  if (answered && question.saltwater) {
-    const s = question.saltwater;
-    const answerText = question.choices[question.answerIndex];
-    const title = '食塩水・濃度｜天秤算';
-    return <main className="app quiz-screen"><ScreenHeader title={title} onBack={() => goBack()} right={`${index + 1} / ${activeQuestions.length}`} /><section className="answer-feedback"><div className={isCorrect ? 'result-banner correct-banner' : 'result-banner wrong-banner'}><span>{isCorrect ? '○ 正解' : '× ちがうよ'}</span><p>{isCorrect ? 'この型で大丈夫！' : 'おしい！ ？から順に求めよう。'}</p></div><div className="explain-section"><p className="section-kicker">今回の型</p><h2>{s.problemPattern}</h2><p className="rule">💡 {question.shortRule}</p></div><div className="reading-summary"><p><b>問題文から分かっていること</b>{s.readingClues.join('・')}</p><p><b>何を求める？</b>{s.questionIntent}</p></div><div className="explain-section"><p className="section-kicker">導出前の天秤図</p><Diagram question={question} revealAnswer={false} /></div><div className="explain-section"><p className="section-kicker">？を求める手順</p><ol><li>問題文で分かる濃度と重さだけを使う</li><li>差は反対側の重さにつなぐ</li><li>比から？を求める</li></ol></div><div className="answer-block"><span>答えが決まる</span><strong>{answerText}</strong><p>{question.explanation}</p></div><div className="explain-section completed-diagram"><p className="section-kicker">答えを入れた完成図</p><Diagram question={question} revealAnswer /></div><p className="mistake">⚠ 間違えやすいポイント：{question.mistakeReason}</p><details><summary>なぜそうなる？</summary><p>{question.deepExplanation}</p></details><button className="primary next-button" onClick={next}>次の問題へ</button></section></main>;
-  }
+  if (answered && question.saltwater) return <SaltwaterAnswerExplanation question={question} isCorrect={isCorrect} index={index} total={activeQuestions.length} menu={quizMenu} onNext={next} />;
   const typeName = question.saltwater?.problemPattern ?? question.sequence?.problemPattern ?? formula?.name ?? '公式の型';
   const categoryTitle = activeCategory === 'saltwater-alligation' ? '食塩水・濃度｜天秤算' : activeCategory === 'sequence-patterns' ? '数列｜規則の見つけ方' : '因数分解・公式暗記';
   const salt = question.saltwater;
   const sequence = question.sequence;
-  return <main className="app quiz-screen"><ScreenHeader title={categoryTitle} onBack={() => goBack()} right={`${index + 1} / ${activeQuestions.length}`} /><div className="progress-label"><span>このセットの進み具合</span><b>{index + (answered ? 1 : 0)} / {activeQuestions.length}</b></div><div className="progress-bar"><span style={{ width: `${((index + (answered ? 1 : 0)) / activeQuestions.length) * 100}%` }} /></div><section className="question-card"><p className="type">🟣 型：{typeName}</p><p className="question-label">この問題は、何の型？</p><h2 className="question-text">{question.question}</h2><div className="look-block"><b>🔎 見る場所</b><span>{question.triggerWords.join(' ・ ')}</span></div><div className="rule-block"><b>💡 合言葉</b><span>{question.shortRule}</span></div></section><div className="choices">{question.choices.map((choice, choiceIndex) => <button key={choice} disabled={answered} className={!answered ? '' : choiceIndex === question.answerIndex ? 'correct' : choiceIndex === selected ? 'wrong' : 'muted-choice'} onClick={() => answer(choiceIndex)}><span>{'ABCD'[choiceIndex]}</span>{choice}</button>)}</div>{answered && <section className="answer-feedback"><div className={isCorrect ? 'result-banner correct-banner' : 'result-banner wrong-banner'}><span>{isCorrect ? '○ 正解' : '× ちがうよ'}</span><p>{isCorrect ? 'この型で大丈夫！' : 'おしい！ この問題はここを見るよ。'}</p></div><div className="explain-section"><p className="section-kicker">今回の型</p><h2>{typeName}</h2><p className="rule">💡 {question.shortRule}</p></div>{salt && <div className="reading-summary"><p><b>何をしている？</b>{salt.problemPattern}</p><p><b>何を聞かれている？</b>{salt.questionIntent}</p><p><b>天秤に置く3つ</b>{salt.lowLabel}・{salt.targetLabel}・{salt.highLabel}</p><p><b>今回の型</b>{salt.problemPattern}</p></div>}{sequence && <div className="reading-summary"><p><b>今回の型</b>{sequence.problemPattern}</p><p><b>まず調べる場所</b>{sequence.readingOrder}</p><p><b>分かった規則</b>{sequence.operationPattern.join('、')}</p></div>}<div className="explain-section"><p className="section-kicker">図解で確認</p><Diagram question={question} /></div><div className="explain-section"><p className="section-kicker">手順</p><ol>{question.steps.map((step) => <li key={step}>{step}</li>)}</ol></div><div className="answer-block"><span>答え</span><strong>{question.choices[question.answerIndex]}</strong><p>{question.explanation}</p></div><p className="mistake">⚠ 間違えやすいポイント：{question.mistakeReason}</p><details><summary>なぜそうなる？</summary><p>{question.deepExplanation}</p></details><button className="primary next-button" onClick={next}>次の問題へ</button></section>}</main>;
+  return <main className="app quiz-screen"><ScreenHeader title={categoryTitle} onBack={() => goBack()} menu={quizMenu} right={`${index + 1} / ${activeQuestions.length}`} /><div className="progress-label"><span>このセットの進み具合</span><b>{index + (answered ? 1 : 0)} / {activeQuestions.length}</b></div><div className="progress-bar"><span style={{ width: `${((index + (answered ? 1 : 0)) / activeQuestions.length) * 100}%` }} /></div><section className="question-card"><p className="type">🟣 型：{typeName}</p><p className="question-label">この問題は、何の型？</p><h2 className="question-text">{question.question}</h2><div className="look-block"><b>🔎 見る場所</b><span>{question.triggerWords.join(' ・ ')}</span></div><div className="rule-block"><b>💡 合言葉</b><span>{question.shortRule}</span></div></section><div className="choices">{question.choices.map((choice, choiceIndex) => <button key={choice} disabled={answered} className={!answered ? '' : choiceIndex === question.answerIndex ? 'correct' : choiceIndex === selected ? 'wrong' : 'muted-choice'} onClick={() => answer(choiceIndex)}><span>{'ABCD'[choiceIndex]}</span>{choice}</button>)}</div>{answered && <section className="answer-feedback"><div className={isCorrect ? 'result-banner correct-banner' : 'result-banner wrong-banner'}><span>{isCorrect ? '○ 正解' : '× ちがうよ'}</span><p>{isCorrect ? 'この型で大丈夫！' : 'おしい！ この問題はここを見るよ。'}</p></div><div className="explain-section"><p className="section-kicker">今回の型</p><h2>{typeName}</h2><p className="rule">💡 {question.shortRule}</p></div>{salt && <div className="reading-summary"><p><b>何をしている？</b>{salt.problemPattern}</p><p><b>何を聞かれている？</b>{salt.questionIntent}</p><p><b>天秤に置く3つ</b>{salt.lowLabel}・{salt.targetLabel}・{salt.highLabel}</p><p><b>今回の型</b>{salt.problemPattern}</p></div>}{sequence && <div className="reading-summary"><p><b>今回の型</b>{sequence.problemPattern}</p><p><b>まず調べる場所</b>{sequence.readingOrder}</p><p><b>分かった規則</b>{sequence.operationPattern.join('、')}</p></div>}<div className="explain-section"><p className="section-kicker">図解で確認</p><Diagram question={question} /></div><div className="explain-section"><p className="section-kicker">手順</p><ol>{question.steps.map((step) => <li key={step}>{step}</li>)}</ol></div><div className="answer-block"><span>答え</span><strong>{question.choices[question.answerIndex]}</strong><p>{question.explanation}</p></div><p className="mistake">⚠ 間違えやすいポイント：{question.mistakeReason}</p><details><summary>なぜそうなる？</summary><p>{question.deepExplanation}</p></details><button className="primary next-button" onClick={next}>次の問題へ</button></section>}</main>;
 }
 
-function ScreenHeader({ title, onBack, right }: { title: string; onBack: () => void; right?: string }) {
-  return <header className="screen-header"><button className="back-button" onClick={onBack}>← 戻る</button><h1>{title}</h1>{right && <span>{right}</span>}</header>;
+function ScreenHeader({ title, onBack, right, menu }: { title: string; onBack: () => void; right?: string; menu?: QuizBackActions }) {
+  return <header className="screen-header">{menu ? <BackMenu {...menu} /> : <button className="back-button" onClick={onBack}>← 戻る</button>}<h1>{title}</h1>{right && <span>{right}</span>}</header>;
 }
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
