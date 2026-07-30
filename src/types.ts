@@ -6,6 +6,9 @@ export type SaltwaterData = {
   problemPattern:string; questionIntent:string; lowConcentration:number; targetConcentration:number; highConcentration:number;
   lowAmount?:number; highAmount?:number; leftDifference:number; rightDifference:number; amountRatio:string;
   lowLabel:string; targetLabel:string; highLabel:string; knownWeight?:string; unknownPosition?:string;
+  shortRule?:string;
+  sourceAmount?:number;
+  givenInformation?: { lowConcentration:boolean; targetConcentration:boolean; highConcentration:boolean; lowAmount?:boolean; targetAmount?:boolean; highAmount?:boolean; amountRatio?:boolean; };
   readingClues:string[]; characterTip:string; answerType:'concentration'|'amount'|'ratio'|'identify';
   validationData:{ expected:number; unit:'%'|'g'|'ratio'|'yes-no'; answerText?:string; mix?:{lowAmount:number;highAmount:number}; };
   finalConcentration?:number; diagramMode?:'placement'|'difference'|'cross'|'ratio'|'water'|'salt'|'evaporation';

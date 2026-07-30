@@ -20,6 +20,20 @@ function validateSaltwater(question) {
   if (s.unknownPosition && !s.hiddenValue.includes(question.choices[question.answerIndex].replace(/[^0-9％g：]/g, '')) && s.answerType !== 'identify') errors.push(`${question.id}: hiddenValueと正解が一致しません`);
   if (!(s.lowConcentration < s.targetConcentration && s.targetConcentration < s.highConcentration)) errors.push(`${question.id}: 低い＜目標＜高い ではありません`);
   if (s.leftDifference !== s.targetConcentration - s.lowConcentration || s.rightDifference !== s.highConcentration - s.targetConcentration) errors.push(`${question.id}: 濃度差が正しくありません`);
+  const given = s.givenInformation;
+  if (!given) errors.push(`${question.id}: 問題文で与える情報が未定義です`);
+  else {
+    const mentionConcentration = (value) => value === 0 ? question.question.includes('水') : value === 100 ? question.question.includes('食塩') : question.question.includes(`${value}％`);
+    const mentionAmount = (value) => question.question.includes(`${value}g`);
+    for (const [position, value] of [['low', s.lowConcentration], ['target', s.targetConcentration], ['high', s.highConcentration]]) {
+      if (given[`${position}Concentration`] && !mentionConcentration(value)) errors.push(`${question.id}: 問題文に${position}Concentration ${value}％がありません`);
+    }
+    for (const [position, value] of [['low', s.lowAmount], ['target', s.sourceAmount], ['high', s.highAmount]]) {
+      if (given[`${position}Amount`] && (!Number.isFinite(value) || !mentionAmount(value))) errors.push(`${question.id}: 問題文に${position}Amount ${value}gがありません`);
+    }
+    if (question.typeId === 'mixed-concentration' && (!given.lowAmount || !given.highAmount)) errors.push(`${question.id}: 混合後濃度には両方の重さか比が必要です`);
+    if (question.typeId === 'unknown-amount' && !given.lowAmount && !given.highAmount) errors.push(`${question.id}: 一方の重さには既知側の重さが必要です`);
+  }
   if ((question.typeId === 'add-water' || question.typeId === 'alligation-identify') && (s.lowConcentration !== 0 || !s.lowLabel.includes('水'))) errors.push(`${question.id}: 水は0％として登録してください`);
   if (question.typeId === 'add-salt' && (s.highConcentration !== 100 || !s.highLabel.includes('食塩'))) errors.push(`${question.id}: 食塩は100％として登録してください`);
   if (question.typeId === 'evaporation' && (s.lowConcentration !== 0 || !s.lowLabel.includes('水'))) errors.push(`${question.id}: 蒸発する水は0％として登録してください`);
@@ -46,6 +60,7 @@ function validateSaltwater(question) {
       if (s.unknownPosition !== 'target-concentration') errors.push(`${question.id}: 導出前の中央濃度を非表示にしてください`);
     }
   }
+  if (question.typeId === 'evaporation' && s.sourceAmount !== undefined && s.sourceAmount !== s.lowAmount + s.highAmount) errors.push(`${question.id}: 蒸発前の重さが蒸発水と残った食塩水の合計に一致しません`);
   const answer = question.choices[question.answerIndex];
   if (s.validationData.answerText && answer !== s.validationData.answerText) errors.push(`${question.id}: 選択肢の正解と登録した答えが一致しません`);
   if (s.answerType === 'ratio' && answer !== s.amountRatio) errors.push(`${question.id}: 比の正解がamountRatioと一致しません`);
