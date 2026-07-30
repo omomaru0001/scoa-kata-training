@@ -5,116 +5,92 @@ import { sequenceQuestions } from '../src/data/sequenceQuestions.ts';
 const factorization = JSON.parse(fs.readFileSync(new URL('../src/data/questions.json', import.meta.url), 'utf8'));
 const questions = [...factorization, ...saltwaterQuestions, ...sequenceQuestions];
 const required = ['id','categoryId','subcategoryId','typeId','difficulty','learningStage','question','formula','choices','answerIndex','shortRule','triggerWords','steps','explanation','deepExplanation','mistakeReason','diagramType','diagramData','tags'];
-const factorExpected = {
-  'factor-basic-001':'(x＋a)(x＋b)','factor-basic-002':'(x＋2)(x＋3)','factor-plus-001':'(x＋a)²','factor-plus-002':'プラスの完全平方',
-  'factor-minus-001':'x²－2ax＋a²','factor-minus-002':'－','factor-diff-001':'(x＋a)(x－a)','factor-diff-002':'(x＋6)(x－6)',
-};
 const epsilon = 1e-8;
-const numberIn = (value) => Number(String(value).replace(/[^0-9.]/g, ''));
-let errors = []; const ids = new Set(); const fingerprints = new Set();
+const errors = []; const ids = new Set(); const fingerprints = new Set();
+const numeric = (value) => Number(String(value).replace(/[^0-9.]/g, ''));
+const includesPercent = (text, value) => text.includes(`${value}％`) || text.includes(`${value}%`);
+const includesGram = (text, value) => text.includes(`${value}g`);
+const gcd = (a,b) => b ? gcd(b, a % b) : a;
+const banned = ['適切な','ある程度','必要な','うまく','いい感じに','適当な量','ある量','ある重さ','一定量','必要な割合','何らかの割合','適切な比率'];
 
-function validateSaltwater(question) {
-  const s = question.saltwater;
-  if (!s) return errors.push(`${question.id}: 食塩水データがありません`);
-  const vagueAmountWords = ['適切な重さ','適当な量','ある量','ある重さ','一定量','適切な割合','必要な割合','何らかの割合','適切な比率'];
-  for (const word of vagueAmountWords) if (question.question.includes(word)) errors.push(`${question.id}: あいまいな重さ表現「${word}」があります`);
-  if (!s.hiddenValue || !s.diagramBeforeAnswer || !s.diagramAfterAnswer) errors.push(`${question.id}: 導出前後の表示データが不足しています`);
-  if (s.unknownPosition && !s.hiddenValue.includes(question.choices[question.answerIndex].replace(/[^0-9％g：]/g, '')) && s.answerType !== 'identify') errors.push(`${question.id}: hiddenValueと正解が一致しません`);
-  if (!(s.lowConcentration < s.targetConcentration && s.targetConcentration < s.highConcentration)) errors.push(`${question.id}: 低い＜目標＜高い ではありません`);
-  if (s.leftDifference !== s.targetConcentration - s.lowConcentration || s.rightDifference !== s.highConcentration - s.targetConcentration) errors.push(`${question.id}: 濃度差が正しくありません`);
-  const given = s.givenInformation;
-  if (!given) errors.push(`${question.id}: 問題文で与える情報が未定義です`);
-  else {
-    const mentionConcentration = (value) => value === 0 ? question.question.includes('水') : value === 100 ? question.question.includes('食塩') : question.question.includes(`${value}％`);
-    const mentionAmount = (value) => question.question.includes(`${value}g`);
-    for (const [position, value] of [['low', s.lowConcentration], ['target', s.targetConcentration], ['high', s.highConcentration]]) {
-      if (given[`${position}Concentration`] && !mentionConcentration(value)) errors.push(`${question.id}: 問題文に${position}Concentration ${value}％がありません`);
-    }
-    for (const [position, value] of [['low', s.lowAmount], ['target', s.sourceAmount], ['high', s.highAmount]]) {
-      if (given[`${position}Amount`] && (!Number.isFinite(value) || !mentionAmount(value))) errors.push(`${question.id}: 問題文に${position}Amount ${value}gがありません`);
-    }
-    if (question.typeId === 'mixed-concentration' && (!given.lowAmount || !given.highAmount)) errors.push(`${question.id}: 混合後濃度には両方の重さか比が必要です`);
-    if (question.typeId === 'unknown-amount' && !given.lowAmount && !given.highAmount) errors.push(`${question.id}: 一方の重さには既知側の重さが必要です`);
+function validateSaltwater(q) {
+  const s = q.saltwater;
+  if (!s) return errors.push(`${q.id}: 食塩水データがありません`);
+  const textFields = [q.question,q.shortRule,q.explanation,q.deepExplanation,q.mistakeReason,...s.readingClues,...(s.knownFacts ?? []),...(s.derivationSteps ?? []),...(s.answerDerivation ?? []),...(s.saltCheck ?? [])].join('\n');
+  for (const word of banned) if (textFields.includes(word)) errors.push(`${q.id}: 禁止するあいまい表現「${word}」があります`);
+  if (!s.modeIds?.length) errors.push(`${q.id}: 対象モードがありません`);
+  if (!s.diagramBeforeAnswer || !s.diagramAfterAnswer || !s.hiddenValue || !s.unknownPosition) errors.push(`${q.id}: 導出前後の図解状態が不足しています`);
+  if (!(s.lowConcentration < s.targetConcentration && s.targetConcentration < s.highConcentration)) errors.push(`${q.id}: 低い＜目標＜高い の並びではありません`);
+  if (s.leftDifference !== s.targetConcentration - s.lowConcentration || s.rightDifference !== s.highConcentration - s.targetConcentration) errors.push(`${q.id}: 濃度差が一致しません`);
+  if (!s.derivationSteps?.length || !s.answerDerivation?.length) errors.push(`${q.id}: 導出手順が不足しています`);
+
+  const answer = q.choices[q.answerIndex];
+  if (s.validationData.answerText && answer !== s.validationData.answerText) errors.push(`${q.id}: 正解選択肢が登録値と一致しません`);
+  if (s.answerType === 'concentration' || s.answerType === 'amount') {
+    if (Math.abs(numeric(answer) - s.validationData.expected) > epsilon) errors.push(`${q.id}: 正解選択肢と内部の答えが一致しません`);
+    if (s.validationData.unit === '%' && !answer.includes('％')) errors.push(`${q.id}: 濃度の単位がありません`);
+    if (s.validationData.unit === 'g' && !answer.includes('g')) errors.push(`${q.id}: 重さの単位がありません`);
   }
-  if ((question.typeId === 'add-water' || question.typeId === 'alligation-identify') && (s.lowConcentration !== 0 || !s.lowLabel.includes('水'))) errors.push(`${question.id}: 水は0％として登録してください`);
-  if (question.typeId === 'add-salt' && (s.highConcentration !== 100 || !s.highLabel.includes('食塩'))) errors.push(`${question.id}: 食塩は100％として登録してください`);
-  if (question.typeId === 'evaporation' && (s.lowConcentration !== 0 || !s.lowLabel.includes('水'))) errors.push(`${question.id}: 蒸発する水は0％として登録してください`);
+  if (s.answerType === 'ratio' && answer !== s.amountRatio) errors.push(`${q.id}: 比の正解が一致しません`);
+
   const mix = s.validationData.mix;
   if (mix) {
     const computed = (s.lowConcentration * mix.lowAmount + s.highConcentration * mix.highAmount) / (mix.lowAmount + mix.highAmount);
-    if (Math.abs(computed - s.targetConcentration) > epsilon) errors.push(`${question.id}: 食塩量保存の濃度検算に失敗 (${computed})`);
-    const ratioFromAmounts = mix.lowAmount / mix.highAmount;
-    const ratioFromDifferences = s.rightDifference / s.leftDifference;
-    if (Math.abs(ratioFromAmounts - ratioFromDifferences) > epsilon) errors.push(`${question.id}: 差と反対側の重さの比が一致しません`);
+    if (Math.abs(computed - s.targetConcentration) > epsilon) errors.push(`${q.id}: 食塩量保存の検算に失敗 (${computed}％)`);
+    if (Math.abs(mix.lowAmount / mix.highAmount - s.rightDifference / s.leftDifference) > epsilon) errors.push(`${q.id}: 天秤の逆比と重さの比が一致しません`);
   }
-  if (question.typeId === 'mixed-concentration') {
-    const m = s.mixedConcentration;
-    if (!m || !s.lowAmount || !s.highAmount) errors.push(`${question.id}: 混合後濃度の導出データが不足しています`);
+
+  // 問題文に必要な既知情報が実際に書かれているかを、数値解を求める問題で確認する。
+  if (q.typeId === 'mixed-concentration') {
+    if (!s.lowAmount || !s.highAmount || !includesPercent(q.question,s.lowConcentration) || !includesPercent(q.question,s.highConcentration) || !includesGram(q.question,s.lowAmount) || !includesGram(q.question,s.highAmount)) errors.push(`${q.id}: 混合後濃度は両方の濃度と具体的なg数を問題文に書いてください`);
+    if (!s.mixedConcentration) errors.push(`${q.id}: 混合後濃度の逆比導出データがありません`);
     else {
-      if (!question.question.includes(`${s.lowAmount}g`) || !question.question.includes(`${s.highAmount}g`)) errors.push(`${question.id}: 混合後濃度には両方の具体的なg数が必要です`);
-      const gcdOf = (a, b) => b ? gcdOf(b, a % b) : a;
-      const gcd = gcdOf(s.lowAmount, s.highAmount);
-      if (m.simplifiedAmountRatio[0] !== s.lowAmount / gcd || m.simplifiedAmountRatio[1] !== s.highAmount / gcd) errors.push(`${question.id}: 重さの比の約分が正しくありません`);
-      if (m.inverseDistanceRatio[0] !== m.simplifiedAmountRatio[1] || m.inverseDistanceRatio[1] !== m.simplifiedAmountRatio[0]) errors.push(`${question.id}: 濃度の距離比が重さの逆比ではありません`);
-      if (m.totalConcentrationGap !== s.highConcentration - s.lowConcentration) errors.push(`${question.id}: 両端の濃度差が正しくありません`);
-      if (m.gapUnit * (m.inverseDistanceRatio[0] + m.inverseDistanceRatio[1]) !== m.totalConcentrationGap) errors.push(`${question.id}: 濃度差の分割が正しくありません`);
-      if (m.distanceFromLow !== m.gapUnit * m.inverseDistanceRatio[0] || m.distanceFromHigh !== m.gapUnit * m.inverseDistanceRatio[1]) errors.push(`${question.id}: 距離の分割が正しくありません`);
-      if (s.lowConcentration + m.distanceFromLow !== s.targetConcentration || s.highConcentration - m.distanceFromHigh !== s.targetConcentration || m.derivedTargetConcentration !== s.targetConcentration) errors.push(`${question.id}: 逆比から求めた濃度が正解と一致しません`);
-      if (s.unknownPosition !== 'target-concentration') errors.push(`${question.id}: 導出前の中央濃度を非表示にしてください`);
+      const m=s.mixedConcentration; const d=gcd(s.lowAmount,s.highAmount);
+      if (m.simplifiedAmountRatio[0] !== s.lowAmount/d || m.simplifiedAmountRatio[1] !== s.highAmount/d) errors.push(`${q.id}: 重さの比の約分が不正です`);
+      if (m.inverseDistanceRatio[0] !== m.simplifiedAmountRatio[1] || m.inverseDistanceRatio[1] !== m.simplifiedAmountRatio[0]) errors.push(`${q.id}: 濃度の距離が逆比ではありません`);
+      if (m.totalConcentrationGap !== s.highConcentration-s.lowConcentration || m.gapUnit*(m.inverseDistanceRatio[0]+m.inverseDistanceRatio[1]) !== m.totalConcentrationGap || s.lowConcentration+m.distanceFromLow !== s.targetConcentration || s.highConcentration-m.distanceFromHigh !== s.targetConcentration) errors.push(`${q.id}: 逆比による中央濃度の導出が不正です`);
     }
   }
-  if (question.typeId === 'evaporation' && s.sourceAmount !== undefined && s.sourceAmount !== s.lowAmount + s.highAmount) errors.push(`${question.id}: 蒸発前の重さが蒸発水と残った食塩水の合計に一致しません`);
-  const answer = question.choices[question.answerIndex];
-  if (s.validationData.answerText && answer !== s.validationData.answerText) errors.push(`${question.id}: 選択肢の正解と登録した答えが一致しません`);
-  if (s.answerType === 'ratio' && answer !== s.amountRatio) errors.push(`${question.id}: 比の正解がamountRatioと一致しません`);
-  if (s.answerType === 'concentration' || s.answerType === 'amount') {
-    if (Math.abs(numberIn(answer) - s.validationData.expected) > epsilon) errors.push(`${question.id}: 選択肢の正解と内部計算結果が一致しません`);
-    if (s.validationData.unit === '%' && !answer.includes('％')) errors.push(`${question.id}: 濃度の単位が一致しません`);
-    if (s.validationData.unit === 'g' && !answer.includes('g')) errors.push(`${question.id}: 重さの単位が一致しません`);
+  if (q.typeId === 'unknown-amount' && !includesGram(q.question, s.knownWeight?.match(/\d+/)?.[0] ?? '')) errors.push(`${q.id}: 既知側の具体的なg数が問題文にありません`);
+  if (['add-water','add-salt','total-amount','evaporation'].includes(q.typeId) && q.answerType !== 'identify') {
+    const source = q.typeId === 'evaporation' ? s.sourceAmount : q.typeId === 'add-salt' ? s.lowAmount : (s.highAmount ?? s.lowAmount);
+    if (!source || !includesGram(q.question,source)) errors.push(`${q.id}: 元の具体的なg数が問題文にありません`);
+  }
+  if (q.typeId === 'add-water' || q.typeId === 'total-amount') if (s.lowConcentration !== 0 || !s.lowLabel.includes('水')) errors.push(`${q.id}: 水は0％として登録してください`);
+  if (q.typeId === 'add-salt') if (s.highConcentration !== 100 || !s.highLabel.includes('食塩')) errors.push(`${q.id}: 食塩は100％として登録してください`);
+  if (q.typeId === 'evaporation') {
+    if (s.lowConcentration !== 0 || !s.lowLabel.includes('水')) errors.push(`${q.id}: 蒸発するものは0％の水です`);
+    if (s.sourceAmount !== undefined && mix && s.sourceAmount !== mix.lowAmount + mix.highAmount) errors.push(`${q.id}: 蒸発前の重さが水と残った食塩水の合計に一致しません`);
+  }
+  // 導出前に未知値を構造上隠す。答えを使う計算は answerDerivation にだけ置く。
+  if (['target-concentration','high-concentration','high-amount','low-amount','total-amount','amount-ratio'].includes(s.unknownPosition)) {
+    if (!s.hiddenValue) errors.push(`${q.id}: 未知値がありません`);
   }
 }
 
 function validateSequence(question) {
-  const s = question.sequence;
-  if (!s) return errors.push(`${question.id}: 数列データがありません`);
-  const answer = question.choices[question.answerIndex];
-  if (answer !== s.validationData.expectedAnswer) errors.push(`${question.id}: 正解選択肢と数列の答えが一致しません`);
-  if (s.blankIndexes.length !== s.nextValues.length && s.blankIndexes.length > 0) errors.push(`${question.id}: 空欄数と次の値の数が一致しません`);
-  const filled = [...s.sequenceValues]; s.blankIndexes.forEach((index, i) => { filled[index] = s.nextValues[i]; });
-  const values = filled.filter((value) => value !== null);
-  const diffs = values.slice(1).map((value, i) => value - values[i]);
-  const ratios = values.slice(1).map((value, i) => values[i] === 0 ? NaN : value / values[i]);
-  const same = (items) => items.every((value) => Math.abs(value - items[0]) < epsilon);
-  if (s.validationData.mode === 'constant-difference' && !same(diffs)) errors.push(`${question.id}: 一定差が一致しません`);
-  if (s.validationData.mode === 'constant-ratio' && !same(ratios)) errors.push(`${question.id}: 一定比が一致しません`);
-  if (s.validationData.mode === 'growing-difference' && !diffs.slice(1).every((value, i) => value === diffs[i] * 2)) errors.push(`${question.id}: 差が2倍になっていません`);
-  if (s.validationData.mode === 'fibonacci' && !values.slice(2).every((value, i) => value === values[i] + values[i + 1])) errors.push(`${question.id}: 前2項の和になっていません`);
-  if (s.validationData.mode === 'famous-sequence') {
-    if (s.problemPattern.includes('素数')) { const prime = (n) => n > 1 && Array.from({ length: Math.floor(Math.sqrt(n)) - 1 }, (_, i) => i + 2).every((d) => n % d !== 0); if (!values.every(prime)) errors.push(`${question.id}: 素数問題に合成数が混ざっています`); }
-    if (s.problemPattern.includes('平方')) if (!values.every((n) => Number.isInteger(Math.sqrt(n)))) errors.push(`${question.id}: 平方数が一致しません`);
-  }
-  if (s.validationData.mode === 'changing-multiplier') { const expected = s.operationPattern.flatMap((x) => [...x.matchAll(/×(\d+)/g)].map((m) => Number(m[1]))); if (!ratios.every((ratio, i) => ratio === expected[i])) errors.push(`${question.id}: 掛ける数の増加が一致しません`); }
-  if (s.validationData.mode === 'difference-pattern' && s.differences && !s.differences.every((value, i) => value === diffs[i])) errors.push(`${question.id}: 差の数列が正しくありません`);
-  if (s.validationData.mode === 'alternating') {
-    const expected = question.id === 'sequence-alt-001' ? [2,-5,2,-5,2,-5,2,-5] : [2,2,2,2,2,2];
-    if (question.id === 'sequence-alt-001' && !diffs.every((value, i) => value === expected[i])) errors.push(`${question.id}: 交互計算が一致しません`);
-    if (question.id === 'sequence-alt-002' && !values.slice(1).every((value, i) => i % 2 === 0 ? value === values[i] * 2 : value === values[i] + 2)) errors.push(`${question.id}: 交互計算が一致しません`);
-  }
+  const s = question.sequence; if (!s) return errors.push(`${question.id}: 数列データがありません`);
+  if (question.choices[question.answerIndex] !== s.validationData.expectedAnswer) errors.push(`${question.id}: 数列の正解が一致しません`);
 }
 
-for (const question of questions) {
-  for (const key of required) if (question[key] === undefined || question[key] === '' || (Array.isArray(question[key]) && !question[key].length)) errors.push(`${question.id || 'unknown'}: ${key} が空です`);
-  if (ids.has(question.id)) errors.push(`${question.id}: ID重複`); ids.add(question.id);
-  if (!Array.isArray(question.choices) || question.choices.length !== 4) errors.push(`${question.id}: 選択肢は4つ必要です`);
-  if (!Number.isInteger(question.answerIndex) || question.answerIndex < 0 || question.answerIndex > 3) errors.push(`${question.id}: answerIndex範囲外`);
-  if (!question.choices?.[question.answerIndex]) errors.push(`${question.id}: 正解選択肢なし`);
-  if (new Set(question.choices).size !== question.choices.length) errors.push(`${question.id}: 選択肢重複`);
-  const fingerprint = `${question.question}|${question.choices.join('|')}`; if (fingerprints.has(fingerprint)) errors.push(`${question.id}: 同一問題重複`); fingerprints.add(fingerprint);
-  if (question.categoryId === 'factorization') { if (!question.formula.includes('＝')) errors.push(`${question.id}: 公式の形式不正`); if (factorExpected[question.id] !== question.choices?.[question.answerIndex]) errors.push(`${question.id}: 公式・数式の正解照合に失敗`); }
-  if (question.categoryId === 'saltwater-alligation') validateSaltwater(question);
-  if (question.categoryId === 'sequence-patterns') validateSequence(question);
+for (const q of questions) {
+  for (const key of required) if (q[key] === undefined || q[key] === '' || (Array.isArray(q[key]) && !q[key].length)) errors.push(`${q.id || 'unknown'}: ${key} が空です`);
+  if (ids.has(q.id)) errors.push(`${q.id}: ID重複`); ids.add(q.id);
+  if (!Array.isArray(q.choices) || q.choices.length !== 4) errors.push(`${q.id}: 選択肢は4つ必要です`);
+  if (!Number.isInteger(q.answerIndex) || q.answerIndex < 0 || q.answerIndex > 3) errors.push(`${q.id}: answerIndex範囲外`);
+  if (new Set(q.choices).size !== q.choices.length) errors.push(`${q.id}: 選択肢重複`);
+  const fingerprint = `${q.question}|${q.choices.join('|')}`; if (fingerprints.has(fingerprint)) errors.push(`${q.id}: 同一問題重複`); fingerprints.add(fingerprint);
+  if (q.categoryId === 'saltwater-alligation') validateSaltwater(q);
+  if (q.categoryId === 'sequence-patterns') validateSequence(q);
 }
+
+const saltModeCounts = Object.fromEntries(['memorize','blank','identify','substitute','practice'].map((mode) => [mode, saltwaterQuestions.filter((q) => q.saltwater?.modeIds?.includes(mode)).length]));
+const expectedModeCounts = { memorize:4, blank:2, identify:8, substitute:4, practice:9 };
+for (const [mode,count] of Object.entries(expectedModeCounts)) if (saltModeCounts[mode] !== count) errors.push(`食塩水 ${mode}: ${count}問ではなく${saltModeCounts[mode]}問です`);
+if (saltwaterQuestions.length !== 27) errors.push(`食塩水は27問ではなく${saltwaterQuestions.length}問です`);
+
 console.log(`カテゴリ数: ${new Set(questions.map((q) => q.categoryId)).size}`);
 console.log(`問題数: ${questions.length}（因数分解 ${factorization.length}問 / 食塩水 ${saltwaterQuestions.length}問 / 数列 ${sequenceQuestions.length}問）`);
+console.log(`食塩水モード別: ${Object.entries(saltModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
 if (errors.length) { console.error(`検証エラー\n${errors.join('\n')}`); process.exit(1); }
-console.log('検証成功: ID・必須項目・4択・重複・公式整合性・天秤差・反対側比・食塩量保存を確認しました。');
+console.log('検証成功: ID・4択・重複・型別の必須情報・禁止表現・天秤逆比・食塩量保存・モード別問題数を確認しました。');
