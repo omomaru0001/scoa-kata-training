@@ -3,7 +3,7 @@ import questionsJson from './data/questions.json';
 import { saltwaterQuestions } from './data/saltwaterQuestions';
 import { sequenceQuestions } from './data/sequenceQuestions';
 import { learningModes, modeById, type LearningModeId } from './constants/learningModes';
-import { createSession, loadSession, saveSession, type LearningSession } from './lib/sessions';
+import { createSession, isSessionComplete, loadSession, saveSession, type LearningSession } from './lib/sessions';
 import { loadHistory, saveHistory, type History } from './lib/storage';
 import { BackMenu, type QuizBackActions } from './components/BackMenu';
 import { Diagram } from './components/Diagram';
@@ -68,6 +68,14 @@ export function AppNew() {
     if (!validSaved) saveSession(nextSession);
     setSession(nextSession); setIndex(nextSession.currentIndex); setAnswers(answersFor(nextSession)); go('session', { modeId:nextMode, index:nextSession.currentIndex, sessionId:nextSession.id });
   };
+  const restartMode = () => {
+    const definition = modeById(modeId); const source = candidates(categoryId, modeId);
+    if (!source.length) { setSession(null); setIndex(0); setAnswers({}); go('session', { modeId, index:0, sessionId:'' }); return; }
+    const ids = (definition.shuffle ? shuffled(source).slice(0, definition.maxQuestions ?? source.length) : source).map((item) => item.id);
+    const nextSession = createSession(categoryId, modeId, ids);
+    saveCurrent(nextSession); setIndex(0); setAnswers({});
+    go('quiz', { modeId, index:0, sessionId:nextSession.id });
+  };
   const selectCategory = (next:CategoryId) => { setCategoryId(next); setModeId('memorize'); setSession(null); setIndex(0); setAnswers({}); go('modes', { categoryId:next, modeId:'memorize', index:0, sessionId:'' }); };
   const beginQuiz = () => {
     if (!session) return;
@@ -94,7 +102,7 @@ export function AppNew() {
   if (screen === 'home') return <main className="app home-screen"><section className="home-title"><span>🌿</span><p className="eyebrow">SCOA・3尺度版 対策</p><h1>SCOA 型トレーニング</h1><p>文章が違っても、まず「この型」を見つけよう。</p></section><section className="home-main"><div className="home-icon">🦉</div><h2>型を見抜く練習を<br/>始めよう。</h2><button className="primary" onClick={() => go('categories')}>学習をはじめる</button></section></main>;
   if (screen === 'categories') return <main className="app"><Header title="カテゴリを選ぶ" onBack={() => go('home')} />{(['factorization','saltwater-alligation','sequence-patterns'] as CategoryId[]).map((id) => <button key={id} className="selection-card" onClick={() => selectCategory(id)}><span className="card-icon">{id==='factorization'?'🟣':id==='saltwater-alligation'?'⚖️':'🔢'}</span><span className="card-copy"><b>{titleFor[id]}</b><small>{id==='saltwater-alligation'?'天秤の型を見つける':id==='sequence-patterns'?'差・比・交互を順番に見る':'公式の型を見分ける'}</small><em>全 {categoryQuestions(id).length}問</em></span><span className="card-arrow">›</span></button>)}</main>;
   if (screen === 'modes') return <main className="app"><Header title="学習モードを選ぶ" onBack={() => go('categories')} /><p className="page-lead">{titleFor[categoryId]}で、今やる練習を選びます。</p><div className="mode-list">{learningModes.map((mode) => { const count=modeCounts[mode.id] ?? 0; return <button key={mode.id} disabled={count===0} className="selection-card mode-card" onClick={() => startMode(mode.id)}><span className="card-icon">{mode.icon}</span><span className="card-copy"><b>{mode.title}</b><small>{mode.description}</small><em>{count ? `${count}問` : mode.id==='weak' ? '対象なし' : '準備中'}</em></span><span className="card-arrow">›</span></button>; })}</div></main>;
-  if (screen === 'session') { const mode=modeById(modeId); if (!session) return <main className="app"><Header title="問題セット" onBack={() => go('modes')} /><section className="empty-card"><span>🌱</span><h2>{modeId==='weak'?'このカテゴリには、まだ復習する問題がありません':'このモードは準備中です'}</h2><p>全問題へ切り替えず、この画面で止まります。</p></section></main>; return <main className="app"><Header title="問題セットを確認" onBack={() => go('modes')} /><section className="empty-card"><span>{mode.icon}</span><h2>{titleFor[categoryId]}</h2><p>{mode.title}</p><p><b>全 {session.questionIds.length}問</b></p><button className="primary" onClick={beginQuiz}>{session.currentIndex ? '続きから始める' : 'このセットを始める'}</button></section></main>; }
+  if (screen === 'session') { const mode=modeById(modeId); if (!session) return <main className="app"><Header title="問題セット" onBack={() => go('modes')} /><section className="empty-card"><span>🌱</span><h2>{modeId==='weak'?'このカテゴリには、まだ復習する問題がありません':'このモードは準備中です'}</h2><p>全問題へ切り替えず、この画面で止まります。</p></section></main>; const completed=isSessionComplete(session); return <main className="app"><Header title="問題セットを確認" onBack={() => go('modes')} /><section className="empty-card"><span>{mode.icon}</span><h2>{titleFor[categoryId]}</h2><p>{mode.title}</p><p><b>全 {session.questionIds.length}問</b></p>{completed && <p>このセットは最後まで解きました。</p>}<button className="primary" onClick={completed ? restartMode : beginQuiz}>{completed ? 'もう一度挑戦する' : session.currentIndex ? '続きから始める' : 'このセットを始める'}</button></section></main>; }
   if (!question || !session) return <main className="app"><Header title="問題セット" onBack={() => go('modes')} /><p>問題セットを選び直してください。</p></main>;
   if (answered && question.saltwater) return <SaltwaterAnswerExplanation question={question} isCorrect={correct} index={index} total={activeQuestions.length} menu={menu} onNext={next} />;
   const typeName = question.saltwater?.problemPattern ?? question.sequence?.problemPattern ?? '公式の型';
