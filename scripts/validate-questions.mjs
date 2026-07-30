@@ -16,6 +16,8 @@ let errors = []; const ids = new Set(); const fingerprints = new Set();
 function validateSaltwater(question) {
   const s = question.saltwater;
   if (!s) return errors.push(`${question.id}: 食塩水データがありません`);
+  const vagueAmountWords = ['適切な重さ','適当な量','ある量','ある重さ','一定量','適切な割合','必要な割合','何らかの割合','適切な比率'];
+  for (const word of vagueAmountWords) if (question.question.includes(word)) errors.push(`${question.id}: あいまいな重さ表現「${word}」があります`);
   if (!s.hiddenValue || !s.diagramBeforeAnswer || !s.diagramAfterAnswer) errors.push(`${question.id}: 導出前後の表示データが不足しています`);
   if (s.unknownPosition && !s.hiddenValue.includes(question.choices[question.answerIndex].replace(/[^0-9％g：]/g, '')) && s.answerType !== 'identify') errors.push(`${question.id}: hiddenValueと正解が一致しません`);
   if (!(s.lowConcentration < s.targetConcentration && s.targetConcentration < s.highConcentration)) errors.push(`${question.id}: 低い＜目標＜高い ではありません`);
@@ -49,6 +51,7 @@ function validateSaltwater(question) {
     const m = s.mixedConcentration;
     if (!m || !s.lowAmount || !s.highAmount) errors.push(`${question.id}: 混合後濃度の導出データが不足しています`);
     else {
+      if (!question.question.includes(`${s.lowAmount}g`) || !question.question.includes(`${s.highAmount}g`)) errors.push(`${question.id}: 混合後濃度には両方の具体的なg数が必要です`);
       const gcdOf = (a, b) => b ? gcdOf(b, a % b) : a;
       const gcd = gcdOf(s.lowAmount, s.highAmount);
       if (m.simplifiedAmountRatio[0] !== s.lowAmount / gcd || m.simplifiedAmountRatio[1] !== s.highAmount / gcd) errors.push(`${question.id}: 重さの比の約分が正しくありません`);

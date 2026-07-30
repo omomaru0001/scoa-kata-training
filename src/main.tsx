@@ -11,6 +11,7 @@ import { BackMenu, type QuizBackActions } from './components/BackMenu';
 import { SaltwaterAnswerExplanation } from './components/SaltwaterAnswerExplanation';
 import type { Question } from './types';
 import './styles.css';
+import { AppNew } from './AppNew';
 
 const questions = [...(questionsJson as Question[]), ...saltwaterQuestions, ...sequenceQuestions];
 type Screen = 'home' | 'categories' | 'modes' | 'formulas' | 'quiz' | 'review' | 'weak';
@@ -134,4 +135,4 @@ function ScreenHeader({ title, onBack, right, menu }: { title: string; onBack: (
   return <header className="screen-header">{menu ? <BackMenu {...menu} /> : <button className="back-button" onClick={onBack}>← 戻る</button>}<h1>{title}</h1>{right && <span>{right}</span>}</header>;
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<React.StrictMode><AppNew /></React.StrictMode>);
