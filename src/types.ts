@@ -4,6 +4,7 @@ export type SequenceType = 'constant-difference'|'constant-ratio'|'growing-diffe
 export type MultiplesDivisorsType = 'common-multiples-count'|'divisor-sum'|'same-remainder'|'same-shortage'|'greatest-common-divisor'|'least-common-multiple-remainder'|'multiple-or-count'|'multiples-identify';
 export type SpeedType = 'basic-speed'|'multi-segment'|'meeting'|'chase'|'circuit'|'arrival-time'|'average-speed'|'speed-identify';
 export type WorkNewtonType = 'work-basic'|'work-reverse'|'work-switch'|'work-complex'|'work-ratio'|'tank'|'newton-basic'|'newton-advanced'|'work-identify';
+export type ProfitLossType = 'profit-basic'|'profit-reverse'|'discount-rate'|'profit-quantity'|'profit-identify';
 export type LearningStage = 'memorize' | 'forward' | 'reverse' | 'blank' | 'symbol' | 'identify' | 'substitute' | 'compare' | 'place' | 'difference' | 'cross' | 'ratio' | 'apply';
 export type SaltwaterData = {
   problemPattern:string; questionIntent:string; lowConcentration:number; targetConcentration:number; highConcentration:number;
@@ -45,5 +46,11 @@ export type WorkNewtonData = {
   knownFacts:string[]; values:Record<string,number|string>;
   validationData:{ kind:WorkNewtonType; expected:string; answerText:string; };
 };
-export type Question = { id:string; categoryId:string; subcategoryId:string; typeId:FormulaId|SaltwaterType|SequenceType|MultiplesDivisorsType|SpeedType|WorkNewtonType; difficulty:'basic'; learningStage:LearningStage; question:string; formula:string; choices:string[]; answerIndex:number; shortRule:string; triggerWords:string[]; steps:string[]; explanation:string; deepExplanation:string; mistakeReason:string; diagramType:'sum-product-pair'|'square-tiles'|'difference-squares'|'saltwater-alligation'|'sequence-pattern'|'multiples-divisors'|'speed'|'work-newton'; diagramData:Record<string,string>; tags:string[]; saltwater?:SaltwaterData; sequence?:SequenceData; multiplesDivisors?:MultiplesDivisorsData; speed?:SpeedData; workNewton?:WorkNewtonData };
+export type ProfitLossData = {
+  problemPattern:string; questionIntent:string; readingClues:string[]; clueReason:string; characterTip:string;
+  modeIds:('memorize'|'blank'|'identify'|'substitute'|'practice')[];
+  diagramMode:'cost'|'reverse'|'discount'|'quantity'|'identify'; knownFacts:string[]; values:Record<string,number|string>;
+  validationData:{ kind:ProfitLossType; expected:string; answerText:string; };
+};
+export type Question = { id:string; categoryId:string; subcategoryId:string; typeId:FormulaId|SaltwaterType|SequenceType|MultiplesDivisorsType|SpeedType|WorkNewtonType|ProfitLossType; difficulty:'basic'; learningStage:LearningStage; question:string; formula:string; choices:string[]; answerIndex:number; shortRule:string; triggerWords:string[]; steps:string[]; explanation:string; deepExplanation:string; mistakeReason:string; diagramType:'sum-product-pair'|'square-tiles'|'difference-squares'|'saltwater-alligation'|'sequence-pattern'|'multiples-divisors'|'speed'|'work-newton'|'profit-loss'; diagramData:Record<string,string>; tags:string[]; saltwater?:SaltwaterData; sequence?:SequenceData; multiplesDivisors?:MultiplesDivisorsData; speed?:SpeedData; workNewton?:WorkNewtonData; profitLoss?:ProfitLossData };
 export type Formula = {id:FormulaId; name:string; formula:string; rule:string; lookFor:string; example:string; diagramType:Question['diagramType']};

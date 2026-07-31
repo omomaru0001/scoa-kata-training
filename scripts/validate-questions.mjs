@@ -4,9 +4,10 @@ import { sequenceQuestions } from '../src/data/sequenceQuestions.ts';
 import { multiplesDivisorsQuestions } from '../src/data/multiplesDivisorsQuestions.ts';
 import { speedQuestions } from '../src/data/speedQuestions.ts';
 import { workNewtonQuestions } from '../src/data/workNewtonQuestions.ts';
+import { profitLossQuestions } from '../src/data/profitLossQuestions.ts';
 
 const factorization = JSON.parse(fs.readFileSync(new URL('../src/data/questions.json', import.meta.url), 'utf8'));
-const questions = [...factorization, ...saltwaterQuestions, ...sequenceQuestions, ...multiplesDivisorsQuestions, ...speedQuestions, ...workNewtonQuestions];
+const questions = [...factorization, ...saltwaterQuestions, ...sequenceQuestions, ...multiplesDivisorsQuestions, ...speedQuestions, ...workNewtonQuestions, ...profitLossQuestions];
 const required = ['id','categoryId','subcategoryId','typeId','difficulty','learningStage','question','formula','choices','answerIndex','shortRule','triggerWords','steps','explanation','deepExplanation','mistakeReason','diagramType','diagramData','tags'];
 const epsilon = 1e-8;
 const errors = []; const ids = new Set(); const fingerprints = new Set();
@@ -144,6 +145,14 @@ function validateWorkNewton(question) {
   if (question.typeId !== 'work-identify' && question.steps.length < 3) errors.push(`${question.id}: 段階的な手順が不足しています`);
   if (question.typeId !== 'work-identify' && question.learningStage !== 'memorize' && !question.question.match(/[0-9□]/)) errors.push(`${question.id}: 問題文に具体的な数値または空欄がありません`);
 }
+function validateProfitLoss(question) {
+  const d=question.profitLoss;
+  if (!d) return errors.push(`${question.id}: 損益算データがありません`);
+  if (!d.modeIds.length) errors.push(`${question.id}: 対象モードがありません`);
+  if (!d.readingClues.length || !d.clueReason) errors.push(`${question.id}: 型判定の合図または理由がありません`);
+  if (question.choices[question.answerIndex] !== d.validationData.answerText) errors.push(`${question.id}: 正解選択肢と登録値が一致しません`);
+  if (question.typeId !== 'profit-identify' && question.steps.length < 3) errors.push(`${question.id}: 段階的な手順が不足しています`);
+}
 
 for (const q of questions) {
   for (const key of required) if (q[key] === undefined || q[key] === '' || (Array.isArray(q[key]) && !q[key].length)) errors.push(`${q.id || 'unknown'}: ${key} が空です`);
@@ -157,6 +166,7 @@ for (const q of questions) {
   if (q.categoryId === 'multiples-divisors') validateMultiplesDivisors(q);
   if (q.categoryId === 'speed-patterns') validateSpeed(q);
   if (q.categoryId === 'work-newton-patterns') validateWorkNewton(q);
+  if (q.categoryId === 'profit-loss-patterns') validateProfitLoss(q);
 }
 
 const saltModeCounts = Object.fromEntries(['memorize','blank','identify','substitute','practice'].map((mode) => [mode, saltwaterQuestions.filter((q) => q.saltwater?.modeIds?.includes(mode)).length]));
@@ -176,11 +186,16 @@ const workNewtonModeCounts = Object.fromEntries(['memorize','blank','identify','
 const expectedWorkNewtonModeCounts = { memorize:8, blank:16, identify:16, substitute:8, practice:56 };
 for (const [mode,count] of Object.entries(expectedWorkNewtonModeCounts)) if (workNewtonModeCounts[mode] !== count) errors.push(`仕事算・ニュートン算 ${mode}: ${count}問ではなく${workNewtonModeCounts[mode]}問です`);
 if (workNewtonQuestions.length !== 104) errors.push(`仕事算・ニュートン算は104問ではなく${workNewtonQuestions.length}問です`);
+const profitLossModeCounts = Object.fromEntries(['memorize','blank','identify','substitute','practice'].map((mode) => [mode, profitLossQuestions.filter((q) => q.profitLoss?.modeIds.includes(mode)).length]));
+const expectedProfitLossModeCounts = { memorize:4, blank:8, identify:8, substitute:4, practice:15 };
+for (const [mode,count] of Object.entries(expectedProfitLossModeCounts)) if (profitLossModeCounts[mode] !== count) errors.push(`損益算 ${mode}: ${count}問ではなく${profitLossModeCounts[mode]}問です`);
+if (profitLossQuestions.length !== 39) errors.push(`損益算は39問ではなく${profitLossQuestions.length}問です`);
 console.log(`カテゴリ数: ${new Set(questions.map((q) => q.categoryId)).size}`);
-console.log(`問題数: ${questions.length}（因数分解 ${factorization.length}問 / 食塩水 ${saltwaterQuestions.length}問 / 数列 ${sequenceQuestions.length}問 / 倍数と約数 ${multiplesDivisorsQuestions.length}問 / 速さ ${speedQuestions.length}問 / 仕事算・ニュートン算 ${workNewtonQuestions.length}問）`);
+console.log(`問題数: ${questions.length}（因数分解 ${factorization.length}問 / 食塩水 ${saltwaterQuestions.length}問 / 数列 ${sequenceQuestions.length}問 / 倍数と約数 ${multiplesDivisorsQuestions.length}問 / 速さ ${speedQuestions.length}問 / 仕事算・ニュートン算 ${workNewtonQuestions.length}問 / 損益算 ${profitLossQuestions.length}問）`);
 console.log(`食塩水モード別: ${Object.entries(saltModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
 console.log(`倍数と約数モード別: ${Object.entries(multiplesModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
 console.log(`速さモード別: ${Object.entries(speedModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
 console.log(`仕事算・ニュートン算モード別: ${Object.entries(workNewtonModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
+console.log(`損益算モード別: ${Object.entries(profitLossModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
 if (errors.length) { console.error(`検証エラー\n${errors.join('\n')}`); process.exit(1); }
 console.log('検証成功: ID・4択・重複・型別の必須情報・禁止表現・天秤逆比・食塩量保存・モード別問題数を確認しました。');
