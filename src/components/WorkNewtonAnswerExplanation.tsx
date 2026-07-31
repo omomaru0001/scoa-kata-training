@@ -6,7 +6,7 @@ export function WorkNewtonAnswerExplanation({ question, isCorrect, index, total,
   const data=question.workNewton!;
   return <main className="app quiz-screen"><header className="screen-header"><BackMenu {...menu}/><h1>仕事算・ニュートン算</h1><span>{index+1} / {total}</span></header>
     <p className="session-label">答えへ進む順番</p><section className="answer-feedback speed-answer">
-      <div className={isCorrect?'result-banner correct-banner':'result-banner wrong-banner'}><span>{isCorrect?'○ 正解':'× ちがうよ'}</span><p>{isCorrect?'整数で考えられたね！':'LCMから順に見直そう。'}</p></div>
+      <div className={isCorrect?'result-banner correct-banner':'result-banner wrong-banner'}><span>{isCorrect?'○ 正解':'× ちがうよ'}</span><p>{isCorrect?'具体的な数で考えられたね！':'何を何個運ぶかから順に見直そう。'}</p></div>
       <div className="explain-section"><p className="section-kicker">今回の型</p><h2>{data.problemPattern}</h2><p className="rule">💡 {question.shortRule}</p></div>
       <div className="reading-summary"><p><b>問題文の合図</b>{data.readingClues.join(' ・ ')}</p><p><b>この型だと分かる理由</b>{data.clueReason}</p><p><b>分かっていること</b>{data.knownFacts.join(' ・ ')}</p></div>
       <div className="explain-section"><p className="section-kicker">図で使う数字を確認</p><Diagram question={question}/></div>
