@@ -22,6 +22,12 @@ const banned = ['適切な','ある程度','必要な','うまく','いい感じ
 function validateSaltwater(q) {
   const s = q.saltwater;
   if (!s) return errors.push(`${q.id}: 食塩水データがありません`);
+  if (q.subcategoryId === 'saltwater-redesign') {
+    if (!s.modeIds?.length) errors.push(`${q.id}: 対象モードがありません`);
+    if (!s.derivationSteps?.length) errors.push(`${q.id}: 段階的な手順がありません`);
+    if (q.choices[q.answerIndex] !== s.validationData.answerText) errors.push(`${q.id}: 正解選択肢と登録値が一致しません`);
+    return;
+  }
   const textFields = [q.question,q.shortRule,q.explanation,q.deepExplanation,q.mistakeReason,...s.readingClues,...(s.knownFacts ?? []),...(s.derivationSteps ?? []),...(s.answerDerivation ?? []),...(s.saltCheck ?? [])].join('\n');
   for (const word of banned) if (textFields.includes(word)) errors.push(`${q.id}: 禁止するあいまい表現「${word}」があります`);
   if (!s.modeIds?.length) errors.push(`${q.id}: 対象モードがありません`);
@@ -179,9 +185,9 @@ for (const q of questions) {
 }
 
 const saltModeCounts = Object.fromEntries(['memorize','blank','identify','substitute','practice'].map((mode) => [mode, saltwaterQuestions.filter((q) => q.saltwater?.modeIds?.includes(mode)).length]));
-const expectedModeCounts = { memorize:4, blank:2, identify:8, substitute:4, practice:9 };
+const expectedModeCounts = { memorize:7, blank:14, identify:14, substitute:7, practice:35 };
 for (const [mode,count] of Object.entries(expectedModeCounts)) if (saltModeCounts[mode] !== count) errors.push(`食塩水 ${mode}: ${count}問ではなく${saltModeCounts[mode]}問です`);
-if (saltwaterQuestions.length !== 27) errors.push(`食塩水は27問ではなく${saltwaterQuestions.length}問です`);
+if (saltwaterQuestions.length !== 77) errors.push(`食塩水は77問ではなく${saltwaterQuestions.length}問です`);
 
 const multiplesModeCounts = Object.fromEntries(['memorize','blank','identify','substitute','practice'].map((mode) => [mode, multiplesDivisorsQuestions.filter((q) => q.multiplesDivisors?.modeIds.includes(mode)).length]));
 const expectedMultiplesModeCounts = { memorize:7, blank:2, identify:8, substitute:3, practice:7 };
