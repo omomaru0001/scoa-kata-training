@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import { saltwaterQuestions } from '../src/data/saltwaterQuestions.ts';
 import { sequenceQuestions } from '../src/data/sequenceQuestions.ts';
+import { multiplesDivisorsQuestions } from '../src/data/multiplesDivisorsQuestions.ts';
+import { speedQuestions } from '../src/data/speedQuestions.ts';
 
 const factorization = JSON.parse(fs.readFileSync(new URL('../src/data/questions.json', import.meta.url), 'utf8'));
-const questions = [...factorization, ...saltwaterQuestions, ...sequenceQuestions];
+const questions = [...factorization, ...saltwaterQuestions, ...sequenceQuestions, ...multiplesDivisorsQuestions, ...speedQuestions];
 const required = ['id','categoryId','subcategoryId','typeId','difficulty','learningStage','question','formula','choices','answerIndex','shortRule','triggerWords','steps','explanation','deepExplanation','mistakeReason','diagramType','diagramData','tags'];
 const epsilon = 1e-8;
 const errors = []; const ids = new Set(); const fingerprints = new Set();
@@ -11,6 +13,7 @@ const numeric = (value) => Number(String(value).replace(/[^0-9.]/g, ''));
 const includesPercent = (text, value) => text.includes(`${value}％`) || text.includes(`${value}%`);
 const includesGram = (text, value) => text.includes(`${value}g`);
 const gcd = (a,b) => b ? gcd(b, a % b) : a;
+const lcm = (values) => values.reduce((answer, value) => answer * value / gcd(answer, value));
 const banned = ['適切な','ある程度','必要な','うまく','いい感じに','適当な量','ある量','ある重さ','一定量','必要な割合','何らかの割合','適切な比率'];
 
 function validateSaltwater(q) {
@@ -73,6 +76,64 @@ function validateSequence(question) {
   if (question.choices[question.answerIndex] !== s.validationData.expectedAnswer) errors.push(`${question.id}: 数列の正解が一致しません`);
 }
 
+function validateMultiplesDivisors(question) {
+  const d=question.multiplesDivisors;
+  if (!d) return errors.push(`${question.id}: 倍数と約数データがありません`);
+  const allText=[question.question,question.shortRule,question.explanation,question.deepExplanation,question.mistakeReason,...d.readingClues,...(d.ladderSteps ?? [])].join('\n');
+  for (const word of banned) if (allText.includes(word)) errors.push(`${question.id}: 禁止するあいまい表現「${word}」があります`);
+  if (!d.modeIds?.length) errors.push(`${question.id}: 対象モードがありません`);
+  const answer=question.choices[question.answerIndex];
+  if (answer !== d.validationData.answerText) errors.push(`${question.id}: 正解選択肢と登録値が一致しません`);
+  const values=d.numbers ?? []; const max=d.range?.max;
+  let computed;
+  switch (question.typeId) {
+    case 'common-multiples-count': computed=Math.floor(max / lcm(values)); break;
+    case 'divisor-sum': {
+      const target=d.divisorTarget; const divisors=Array.from({length:target},(_,i)=>i+1).filter((n)=>target%n===0);
+      if (divisors.join(',') !== (d.divisorList ?? []).join(',')) errors.push(`${question.id}: 約数一覧が一致しません`);
+      computed=divisors.reduce((sum,n)=>sum+n,0); break;
+    }
+    case 'same-remainder': computed=question.learningStage === 'blank' ? d.remainder : Array.from({length:max-d.range.min+1},(_,i)=>d.range.min+i).filter((n)=>values.every((v)=>n%v===d.remainder)); break;
+    case 'same-shortage': computed=question.learningStage === 'blank' ? d.shortage : Array.from({length:max-d.range.min+1},(_,i)=>d.range.min+i).filter((n)=>values.every((v)=>n%v===v-d.shortage)); break;
+    case 'greatest-common-divisor': computed=values.reduce(gcd); break;
+    case 'least-common-multiple-remainder': computed=lcm(values)+d.remainder; break;
+    case 'multiple-or-count': computed=Math.floor(max/values[0])+Math.floor(max/values[1])-Math.floor(max/lcm(values)); break;
+    case 'multiples-identify': return;
+    default: errors.push(`${question.id}: 未知の倍数と約数型です`); return;
+  }
+  const expected=d.validationData.expected;
+  const actual=Array.isArray(computed) ? computed.length : computed;
+  if (actual !== expected) errors.push(`${question.id}: 内部計算は${actual}ですが正解は${expected}です`);
+  if (Array.isArray(computed) && d.validationData.enumerate && computed.join(',') !== d.validationData.enumerate.join(',')) errors.push(`${question.id}: 数え上げ結果が一致しません`);
+  if (!question.question.match(/[0-9]/)) errors.push(`${question.id}: 問題文に具体的な数値がありません`);
+}
+
+function validateSpeed(question) {
+  const s=question.speed;
+  if (!s) return errors.push(`${question.id}: 速さデータがありません`);
+  const text=[question.question,question.shortRule,question.explanation,question.deepExplanation,question.mistakeReason,...question.steps,...s.readingClues,s.clueReason].join('\n');
+  for (const word of banned) if (text.includes(word)) errors.push(`${question.id}: 禁止するあいまい表現「${word}」があります`);
+  for (const word of ['明らか','当然']) if (text.includes(word)) errors.push(`${question.id}: 根拠を省略する表現「${word}」があります`);
+  if (!s.modeIds.length) errors.push(`${question.id}: 対象モードがありません`);
+  if (question.choices[question.answerIndex] !== s.validationData.answerText) errors.push(`${question.id}: 正解選択肢と登録値が一致しません`);
+  if (!s.readingClues.length || !s.clueReason) errors.push(`${question.id}: 型判定の合図または理由がありません`);
+  if (question.typeId !== 'speed-identify' && question.steps.length < 3) errors.push(`${question.id}: 段階的な手順が不足しています`);
+  const v=s.values; const expected=Number(s.validationData.expected); let computed;
+  if (question.typeId === 'basic-speed') {
+    if (v.speed !== undefined && v.timeMinutes !== undefined && v.distance === undefined) computed=s.validationData.unit==='m/分' ? Number(v.speed)*1000/60 : Number(v.speed)*Number(v.timeMinutes)/60;
+    if (v.distance !== undefined && v.timeMinutes !== undefined) computed=s.validationData.unit==='m/分' ? Number(v.distance)/Number(v.timeMinutes) : Number(v.distance)/(Number(v.timeMinutes)/60);
+    if (v.distance !== undefined && v.speed !== undefined && v.timeMinutes === undefined) computed=s.validationData.unit==='分' ? (Number(v.distance)<100 ? Number(v.distance)*1000/Number(v.speed) : Number(v.distance)/Number(v.speed)) : Number(v.distance)/Number(v.speed);
+  }
+  if (question.typeId === 'multi-segment') computed=v.d1 !== undefined ? Number(v.d1)/Number(v.s1)+Number(v.d2)/Number(v.s2) : Number(v.s1)*Number(v.t1)+Number(v.s2)*Number(v.t2);
+  if (question.typeId === 'meeting') { const raw=v.distance !== undefined ? Number(v.distance)/(Number(v.a)+Number(v.b)) : (Number(v.a)+Number(v.b))*Number(v.time); computed=s.validationData.unit==='分' && Number(v.distance) < 100 ? raw*60 : raw; }
+  if (question.typeId === 'chase') { const lead=Number(v.slow)*Number(v.leadMinutes)/60; const time=lead/(Number(v.fast)-Number(v.slow)); computed=s.validationData.unit==='km' ? Number(v.fast)*time : s.validationData.unit==='分' ? time*60 : time; }
+  if (question.typeId === 'circuit') { const relative=v.direction==='反対' ? Number(v.a)+Number(v.b) : Number(v.a)-Number(v.b); computed=Number(v.lap)/relative*(Number(v.lap) < 100 ? 60 : 1); }
+  if (question.typeId === 'arrival-time') { const diff=s.validationData.unit==='m' ? Number(v.differenceMinutes) : Number(v.differenceMinutes)/60; const normalTime=Number(v.changed)*diff/(Number(v.changed)-Number(v.normal)); computed=Number(v.normal)*normalTime; }
+  if (question.typeId === 'average-speed') { const time=Number(v.distance)/Number(v.go)+Number(v.distance)/Number(v.back); computed=Number(v.distance)*2/time; }
+  if (computed !== undefined && Math.abs(computed-expected) > epsilon) errors.push(`${question.id}: 公式による検算は${computed}ですが登録値は${expected}です`);
+  if (question.typeId === 'average-speed' && (Number(v.go)+Number(v.back))/2 === expected) errors.push(`${question.id}: 平均の速さが単純平均と同じです。違いを確認できません`);
+}
+
 for (const q of questions) {
   for (const key of required) if (q[key] === undefined || q[key] === '' || (Array.isArray(q[key]) && !q[key].length)) errors.push(`${q.id || 'unknown'}: ${key} が空です`);
   if (ids.has(q.id)) errors.push(`${q.id}: ID重複`); ids.add(q.id);
@@ -82,6 +143,8 @@ for (const q of questions) {
   const fingerprint = `${q.question}|${q.choices.join('|')}`; if (fingerprints.has(fingerprint)) errors.push(`${q.id}: 同一問題重複`); fingerprints.add(fingerprint);
   if (q.categoryId === 'saltwater-alligation') validateSaltwater(q);
   if (q.categoryId === 'sequence-patterns') validateSequence(q);
+  if (q.categoryId === 'multiples-divisors') validateMultiplesDivisors(q);
+  if (q.categoryId === 'speed-patterns') validateSpeed(q);
 }
 
 const saltModeCounts = Object.fromEntries(['memorize','blank','identify','substitute','practice'].map((mode) => [mode, saltwaterQuestions.filter((q) => q.saltwater?.modeIds?.includes(mode)).length]));
@@ -89,8 +152,18 @@ const expectedModeCounts = { memorize:4, blank:2, identify:8, substitute:4, prac
 for (const [mode,count] of Object.entries(expectedModeCounts)) if (saltModeCounts[mode] !== count) errors.push(`食塩水 ${mode}: ${count}問ではなく${saltModeCounts[mode]}問です`);
 if (saltwaterQuestions.length !== 27) errors.push(`食塩水は27問ではなく${saltwaterQuestions.length}問です`);
 
+const multiplesModeCounts = Object.fromEntries(['memorize','blank','identify','substitute','practice'].map((mode) => [mode, multiplesDivisorsQuestions.filter((q) => q.multiplesDivisors?.modeIds.includes(mode)).length]));
+const expectedMultiplesModeCounts = { memorize:7, blank:2, identify:8, substitute:3, practice:7 };
+for (const [mode,count] of Object.entries(expectedMultiplesModeCounts)) if (multiplesModeCounts[mode] !== count) errors.push(`倍数と約数 ${mode}: ${count}問ではなく${multiplesModeCounts[mode]}問です`);
+if (multiplesDivisorsQuestions.length !== 27) errors.push(`倍数と約数は27問ではなく${multiplesDivisorsQuestions.length}問です`);
+const speedModeCounts = Object.fromEntries(['memorize','blank','identify','substitute','practice'].map((mode) => [mode, speedQuestions.filter((q) => q.speed?.modeIds.includes(mode)).length]));
+const expectedSpeedModeCounts = { memorize:7, blank:2, identify:15, substitute:3, practice:49 };
+for (const [mode,count] of Object.entries(expectedSpeedModeCounts)) if (speedModeCounts[mode] !== count) errors.push(`速さ ${mode}: ${count}問ではなく${speedModeCounts[mode]}問です`);
+if (speedQuestions.length !== 76) errors.push(`速さは76問ではなく${speedQuestions.length}問です`);
 console.log(`カテゴリ数: ${new Set(questions.map((q) => q.categoryId)).size}`);
-console.log(`問題数: ${questions.length}（因数分解 ${factorization.length}問 / 食塩水 ${saltwaterQuestions.length}問 / 数列 ${sequenceQuestions.length}問）`);
+console.log(`問題数: ${questions.length}（因数分解 ${factorization.length}問 / 食塩水 ${saltwaterQuestions.length}問 / 数列 ${sequenceQuestions.length}問 / 倍数と約数 ${multiplesDivisorsQuestions.length}問 / 速さ ${speedQuestions.length}問）`);
 console.log(`食塩水モード別: ${Object.entries(saltModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
+console.log(`倍数と約数モード別: ${Object.entries(multiplesModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
+console.log(`速さモード別: ${Object.entries(speedModeCounts).map(([mode,count])=>`${mode} ${count}問`).join(' / ')}`);
 if (errors.length) { console.error(`検証エラー\n${errors.join('\n')}`); process.exit(1); }
 console.log('検証成功: ID・4択・重複・型別の必須情報・禁止表現・天秤逆比・食塩量保存・モード別問題数を確認しました。');
