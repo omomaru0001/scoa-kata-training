@@ -3,6 +3,7 @@ export type SaltwaterType = 'placement' | 'difference-cross' | 'ratio' | 'mixed-
 export type SequenceType = 'constant-difference'|'constant-ratio'|'growing-difference'|'alternating'|'fibonacci'|'famous-sequence'|'changing-multiplier'|'difference-pattern'|'sequence-identify';
 export type MultiplesDivisorsType = 'common-multiples-count'|'divisor-sum'|'same-remainder'|'same-shortage'|'greatest-common-divisor'|'least-common-multiple-remainder'|'multiple-or-count'|'multiples-identify';
 export type SpeedType = 'basic-speed'|'multi-segment'|'meeting'|'chase'|'circuit'|'arrival-time'|'average-speed'|'speed-identify';
+export type WorkNewtonType = 'work-basic'|'work-reverse'|'work-switch'|'work-complex'|'work-ratio'|'tank'|'newton-basic'|'newton-advanced'|'work-identify';
 export type LearningStage = 'memorize' | 'forward' | 'reverse' | 'blank' | 'symbol' | 'identify' | 'substitute' | 'compare' | 'place' | 'difference' | 'cross' | 'ratio' | 'apply';
 export type SaltwaterData = {
   problemPattern:string; questionIntent:string; lowConcentration:number; targetConcentration:number; highConcentration:number;
@@ -37,5 +38,12 @@ export type SpeedData = {
   diagramMode:'basic'|'segments'|'meeting'|'chase'|'circuit'|'arrival'|'average'|'identify';
   knownFacts:string[]; values:Record<string,number|string>; validationData:{ kind:SpeedType; expected:number|string; answerText:string; unit:string; };
 };
-export type Question = { id:string; categoryId:string; subcategoryId:string; typeId:FormulaId|SaltwaterType|SequenceType|MultiplesDivisorsType|SpeedType; difficulty:'basic'; learningStage:LearningStage; question:string; formula:string; choices:string[]; answerIndex:number; shortRule:string; triggerWords:string[]; steps:string[]; explanation:string; deepExplanation:string; mistakeReason:string; diagramType:'sum-product-pair'|'square-tiles'|'difference-squares'|'saltwater-alligation'|'sequence-pattern'|'multiples-divisors'|'speed'; diagramData:Record<string,string>; tags:string[]; saltwater?:SaltwaterData; sequence?:SequenceData; multiplesDivisors?:MultiplesDivisorsData; speed?:SpeedData };
+export type WorkNewtonData = {
+  problemPattern:string; questionIntent:string; readingClues:string[]; clueReason:string; characterTip:string;
+  modeIds:('memorize'|'blank'|'identify'|'substitute'|'practice')[];
+  diagramMode:'lcm'|'switch'|'ratio'|'tank'|'queue'|'identify';
+  knownFacts:string[]; values:Record<string,number|string>;
+  validationData:{ kind:WorkNewtonType; expected:string; answerText:string; };
+};
+export type Question = { id:string; categoryId:string; subcategoryId:string; typeId:FormulaId|SaltwaterType|SequenceType|MultiplesDivisorsType|SpeedType|WorkNewtonType; difficulty:'basic'; learningStage:LearningStage; question:string; formula:string; choices:string[]; answerIndex:number; shortRule:string; triggerWords:string[]; steps:string[]; explanation:string; deepExplanation:string; mistakeReason:string; diagramType:'sum-product-pair'|'square-tiles'|'difference-squares'|'saltwater-alligation'|'sequence-pattern'|'multiples-divisors'|'speed'|'work-newton'; diagramData:Record<string,string>; tags:string[]; saltwater?:SaltwaterData; sequence?:SequenceData; multiplesDivisors?:MultiplesDivisorsData; speed?:SpeedData; workNewton?:WorkNewtonData };
 export type Formula = {id:FormulaId; name:string; formula:string; rule:string; lookFor:string; example:string; diagramType:Question['diagramType']};
